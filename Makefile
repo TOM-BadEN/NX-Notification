@@ -43,6 +43,7 @@ SOURCES		:=	source source/util
 DATA		:=	data
 INCLUDES	:=	include
 #ROMFS	:=	romfs
+CONFIG_JSON	:=	sys-notification.json
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -76,7 +77,7 @@ LIBDIRS	:= $(PORTLIBS) $(LIBNX)
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 #---------------------------------------------------------------------------------
 
-export OUTPUT	:=	$(CURDIR)/$(TARGET)
+export OUTPUT	:=	$(CURDIR)/$(BUILD)/$(TARGET)
 export TOPDIR	:=	$(CURDIR)
 
 export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
@@ -165,20 +166,21 @@ $(BUILD):
 	@[ -d $@ ] || mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 	@rm -rf out
-	@mkdir -p out/atmosphere/contents/0100000000000123/flags
+	@mkdir -p out/atmosphere/contents/0100000123123123/flags
 # 	@mkdir -p out/config/$(TARGET)
 #   这个boot2.flag是为了让Atmosphere开机自启该服务
-# 	@touch out/atmosphere/contents/0100000000000123/flags/boot2.flag
-	@cp $(TARGET).nsp out/atmosphere/contents/0100000000000123/exefs.nsp
-	@cp toolbox.json out/atmosphere/contents/0100000000000123/toolbox.json
+# 	@touch out/atmosphere/contents/0100000123123123/flags/boot2.flag
+	@cp $(BUILD)/$(TARGET).nsp out/atmosphere/contents/0100000123123123/exefs.nsp
+	@cp toolbox.json out/atmosphere/contents/0100000123123123/toolbox.json
 
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
+	@rm -fr $(BUILD) out
 ifeq ($(strip $(APP_JSON)),)
-	@rm -fr $(BUILD) $(TARGET).nro $(TARGET).nacp $(TARGET).elf
+	@rm -f $(TARGET).nro $(TARGET).nacp $(TARGET).elf
 else
-	@rm -fr $(BUILD) $(TARGET).nsp $(TARGET).nso $(TARGET).npdm $(TARGET).elf
+	@rm -f $(TARGET).nsp $(TARGET).nso $(TARGET).npdm $(TARGET).elf
 endif
 
 
