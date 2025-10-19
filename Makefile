@@ -76,7 +76,7 @@ LIBDIRS	:= $(PORTLIBS) $(LIBNX)
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 #---------------------------------------------------------------------------------
 
-export OUTPUT	:=	$(CURDIR)/$(TARGET)
+export OUTPUT	:=	$(CURDIR)/$(BUILD)/$(TARGET)
 export TOPDIR	:=	$(CURDIR)
 
 export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
@@ -115,12 +115,17 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
 ifeq ($(strip $(CONFIG_JSON)),)
-	jsons := $(wildcard *.json)
-	ifneq (,$(findstring $(TARGET).json,$(jsons)))
-		export APP_JSON := $(TOPDIR)/$(TARGET).json
+	# 优先在 sys-json 目录查找配置文件
+	ifneq (,$(wildcard sys-json/$(TARGET).json))
+		export APP_JSON := $(TOPDIR)/sys-json/$(TARGET).json
 	else
-		ifneq (,$(findstring config.json,$(jsons)))
-			export APP_JSON := $(TOPDIR)/config.json
+		jsons := $(wildcard *.json)
+		ifneq (,$(findstring $(TARGET).json,$(jsons)))
+			export APP_JSON := $(TOPDIR)/$(TARGET).json
+		else
+			ifneq (,$(findstring config.json,$(jsons)))
+				export APP_JSON := $(TOPDIR)/config.json
+			endif
 		endif
 	endif
 else
@@ -169,16 +174,16 @@ $(BUILD):
 # 	@mkdir -p out/config/$(TARGET)
 #   这个boot2.flag是为了让Atmosphere开机自启该服务
 # 	@touch out/atmosphere/contents/0100000000251020/flags/boot2.flag
-	@cp $(TARGET).nsp out/atmosphere/contents/0100000000251020/exefs.nsp
-	@cp toolbox.json out/atmosphere/contents/0100000000251020/toolbox.json
+	@cp $(BUILD)/$(TARGET).nsp out/atmosphere/contents/0100000000251020/exefs.nsp
+	@cp sys-json/toolbox.json out/atmosphere/contents/0100000000251020/toolbox.json
 
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
 ifeq ($(strip $(APP_JSON)),)
-	@rm -fr $(BUILD) $(TARGET).nro $(TARGET).nacp $(TARGET).elf
+	@rm -fr $(BUILD) $(TARGET).nro $(TARGET).nacp $(TARGET).elf out
 else
-	@rm -fr $(BUILD) $(TARGET).nsp $(TARGET).nso $(TARGET).npdm $(TARGET).elf
+	@rm -fr $(BUILD) $(TARGET).nsp $(TARGET).nso $(TARGET).npdm $(TARGET).elf out
 endif
 
 
