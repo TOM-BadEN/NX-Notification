@@ -34,7 +34,7 @@ static char *cur_time() {
 static void log_write(const char *level, const char *file, int line, const char *fmt, va_list args) {
     mutexLock(&log_mutex);
     if (!log_file) {
-        log_file = fopen(LOG_FILE_PATH, "a");
+        log_file = fopen(LOG_FILE_PATH, "w");
         if (!log_file) {
             mutexUnlock(&log_mutex);
             return;
