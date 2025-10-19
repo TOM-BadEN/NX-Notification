@@ -16,6 +16,7 @@
 // 字体与系统语言服务
 #include <switch/services/pl.h>
 #include <switch/services/set.h>
+#include <switch/services/pm.h>
 #include <switch/runtime/hosversion.h>
 // NV 与 NVMAP/FENCE 以便显式初始化与日志
 #include <switch/services/nv.h>
@@ -58,6 +59,9 @@ static bool g_gfxInitialized = false;
 static stbtt_fontinfo g_font_std, g_font_local, g_font_ext;
 static bool g_has_local_font = false;
 static bool g_fonts_initialized = false;
+
+// 函数声明
+static void fonts_exit(void);
 
 // VI 层栈添加（tesla.hpp 使用的辅助函数）
 static Result viAddToLayerStack(ViLayer *layer, ViLayerStack stack) {
@@ -164,7 +168,7 @@ static Result gfx_init(void) {
     CFG_LayerPosX = (u16)((SCREEN_WIDTH - CFG_LayerWidth) / 2);
     CFG_LayerPosY = (u16)((SCREEN_HEIGHT - CFG_LayerHeight) / 2); // 等于 0
 
-    log_info("viInitialize(ViServiceType_Manager)...");
+    log_info("viInitialize(ViServiceType_Manager)");
     Result rc = viInitialize(ViServiceType_Manager);
     if (R_FAILED(rc)) return rc;
 
@@ -192,25 +196,17 @@ static Result gfx_init(void) {
     rc = viSetLayerScalingMode(&g_layer, ViScalingMode_FitToLayer);
     if (R_FAILED(rc)) return rc;
 
-    s32 layerZ = 0;
-    if (R_SUCCEEDED(viGetZOrderCountMax(&g_display, &layerZ)) && layerZ > 0) {
-        log_info("viSetLayerZ(%d)...", layerZ);
-        rc = viSetLayerZ(&g_layer, layerZ);
-        if (R_FAILED(rc)) return rc;
-    }
+    s32 layerZ = 250;
+    log_info("viSetLayerZ(%d)...", layerZ);
+    rc = viSetLayerZ(&g_layer, layerZ);
+    if (R_FAILED(rc)) return rc;
 
-    // 按 tesla.hpp 将 Layer 加入多个层栈（至少 Default）
-    log_info("viAddToLayerStack(Default/Lcd/others)...");
+    // 添加到图层栈
+    log_info("viAddToLayerStack(Default and Screenshot)...");
     rc = viAddToLayerStack(&g_layer, ViLayerStack_Default);
     if (R_FAILED(rc)) return rc;
-    // 可选：截图/录制/任意/最后一帧/空/LCD/调试
-    viAddToLayerStack(&g_layer, ViLayerStack_Screenshot);
-    viAddToLayerStack(&g_layer, ViLayerStack_Recording);
-    viAddToLayerStack(&g_layer, ViLayerStack_Arbitrary);
-    viAddToLayerStack(&g_layer, ViLayerStack_LastFrame);
-    viAddToLayerStack(&g_layer, ViLayerStack_Null);
-    viAddToLayerStack(&g_layer, ViLayerStack_ApplicationForDebug);
-    viAddToLayerStack(&g_layer, ViLayerStack_Lcd);
+    rc = viAddToLayerStack(&g_layer, ViLayerStack_Screenshot);
+    if (R_FAILED(rc)) return rc;
 
     log_info("viSetLayerSize(%u,%u)...", CFG_LayerWidth, CFG_LayerHeight);
     rc = viSetLayerSize(&g_layer, CFG_LayerWidth, CFG_LayerHeight);
@@ -234,15 +230,44 @@ static Result gfx_init(void) {
 
 static void gfx_exit(void) {
     if (!g_gfxInitialized) return;
+    
+    log_info("开始清理图形资源...");
+    
+    // 首先清理字体资源
+    fonts_exit();
+    
+    // 清理图形相关资源
     framebufferClose(&g_framebuffer);
     nwindowClose(&g_window);
-    // 彻底销毁 Managed Layer，避免残留占用
-    log_info("viDestroyManagedLayer...");
-    viDestroyManagedLayer(&g_layer);
-    viCloseDisplay(&g_display);
+    
+    // 安全清理VI资源，避免与Status-Monitor-Overlay退出冲突
+    log_info("安全清理VI资源...");
+    
+    // 检查VI服务是否仍然可用
+    Result rc = 0;
+    
+    // 尝试销毁Managed Layer
+    rc = viDestroyManagedLayer(&g_layer);
+    if (R_FAILED(rc)) {
+        log_info("viDestroyManagedLayer失败 (可能已被其他程序清理): 0x%x", rc);
+    }
+    
+    // 尝试关闭Display
+    rc = viCloseDisplay(&g_display);
+    if (R_FAILED(rc)) {
+        log_info("viCloseDisplay失败 (可能已被其他程序清理): 0x%x", rc);
+    }
+    
     eventClose(&g_vsyncEvent);
+    
+    // 最后尝试退出VI服务
+    // 如果其他程序（如Status-Monitor-Overlay）已经调用了viExit()，
+    // 这里的调用可能会失败，但不会导致程序崩溃
     viExit();
+    
     g_gfxInitialized = false;
+    
+    log_info("图形资源清理完成");
 }
 
 // UTF-8 解析为 Unicode 码点（简易实现）
@@ -309,6 +334,26 @@ static Result fonts_init(void) {
              "已加载",
              g_has_local_font ? "已加载" : "未加载");
     return 0;
+}
+
+// 字体资源清理函数
+static void fonts_exit(void) {
+    if (!g_fonts_initialized) return;
+    
+    log_info("清理字体资源...");
+    
+    // 重置字体状态标志
+    g_fonts_initialized = false;
+    g_has_local_font = false;
+    
+    // 注意：STB TrueType 使用的是系统共享字体缓冲区，
+    // 这些缓冲区由 pl 服务管理，不需要手动释放
+    // 只需要重置 fontinfo 结构体即可
+    memset(&g_font_std, 0, sizeof(stbtt_fontinfo));
+    memset(&g_font_local, 0, sizeof(stbtt_fontinfo));
+    memset(&g_font_ext, 0, sizeof(stbtt_fontinfo));
+    
+    log_info("字体资源清理完成");
 }
 
 // 使用指定字体在帧缓冲上渲染 UTF-8 字符串（旧实现，现由回退版本替代）
@@ -446,82 +491,69 @@ void __libnx_initheap(void)
 // 必要服务初始化（最小化）
 void __appInit(void)
 {
-    // 参考 libnx 默认初始化，确保时间与 SD 卡挂载可用
-    Result rc = smInitialize();
-    if (R_FAILED(rc)) return;
-
-    // AppletType_None 时 appletInitialize 返回 0，作为类型选择器
-    appletInitialize();
-    timeInitialize();
-    fsInitialize();
+    log_info("应用程序初始化开始...");
+    
+    Result rc = 0;
+    
+    // 基础服务初始化
+    rc = smInitialize();
+    if (R_FAILED(rc)) {
+        log_error("smInitialize失败: 0x%x", rc);
+        fatalThrow(rc);
+    }
+    
+    rc = fsInitialize();
+    if (R_FAILED(rc)) {
+        log_error("fsInitialize失败: 0x%x", rc);
+        fatalThrow(rc);
+    }
+    
     fsdevMountSdmc();
-    // HID 在 None 类型下不是必须，按需初始化
-    hidInitialize();
-
-    // 初始化设置服务（用于读取系统语言）
-    Result src = setInitialize();
-    if (R_FAILED(src)) {
-        log_error("setInitialize 失败: 0x%x", src);
+    
+    // 其他服务初始化
+    rc = hidInitialize();
+    if (R_FAILED(rc)) {
+        log_error("hidInitialize失败: 0x%x", rc);
+        fatalThrow(rc);
     }
-
-    // 初始化字体服务：统一先尝试 pl:u，失败再回退到 pl:s
-    // 这样在 16.0.0+（如 20.5）环境下直接命中 pl:u，避免 pl:s 的版本不兼容错误
-    Result prc = plInitialize(PlServiceType_User);
-    if (R_SUCCEEDED(prc)) {
-        log_info("plInitialize(pl:u) 成功");
-    } else {
-        log_error("plInitialize(pl:u) 失败: 0x%x，尝试 pl:s", prc);
-        prc = plInitialize(PlServiceType_System);
-        if (R_SUCCEEDED(prc)) {
-            log_info("plInitialize(pl:s) 成功(作为回退)");
-        } else {
-            log_error("plInitialize(pl:s) 也失败: 0x%x", prc);
-        }
+    
+    rc = plInitialize(PlServiceType_User);
+    if (R_FAILED(rc)) {
+        log_error("plInitialize失败: 0x%x", rc);
+        fatalThrow(rc);
     }
-
-    // NV 初始化提前到 appinit，避免在 gfx_init 阶段卡住，并输出详细日志
-    AppletType appType = appletGetAppletType();
-    log_info("appletGetAppletType=%d", (int)appType);
-    log_info("nvInitialize... (force type=%d, tmem=0x%x)", __nx_nv_service_type, __nx_nv_transfermem_size);
-    Result rc2 = nvInitialize();
-    if (R_FAILED(rc2)) {
-        log_error("nvInitialize 失败: 0x%x", rc2);
-    } else {
-        log_info("nvInitialize 成功");
+    
+    rc = setInitialize();
+    if (R_FAILED(rc)) {
+        log_error("setInitialize失败: 0x%x", rc);
+        fatalThrow(rc);
     }
-    log_info("nvMapInit...");
-    rc2 = nvMapInit();
-    if (R_FAILED(rc2)) {
-        log_error("nvMapInit 失败: 0x%x", rc2);
-    } else {
-        log_info("nvMapInit 成功");
-    }
-    log_info("nvFenceInit...");
-    rc2 = nvFenceInit();
-    if (R_FAILED(rc2)) {
-        log_error("nvFenceInit 失败: 0x%x", rc2);
-    } else {
-        log_info("nvFenceInit 成功");
-    }
+    
+    log_info("应用程序初始化完成");
 }
 
 // 服务释放
 void __appExit(void)
 {
-    hidExit();
-    fsExit();
-    // 设置服务退出
-    setExit();
-    // 字体服务退出
+    log_info("应用程序退出开始...");
+    
+    // 优先清理图形资源，避免与其他叠加层冲突
+    gfx_exit();
+    
+    // 清理字体资源
+    fonts_exit();
+    
+    // 清理其他服务
     plExit();
-    // NV 相关清理
-    log_info("nvFenceExit...");
-    nvFenceExit();
-    log_info("nvMapExit...");
-    nvMapExit();
-    log_info("nvExit...");
-    nvExit();
+    setExit();
+    hidExit();
+    
+    // 最后清理基础服务
+    fsdevUnmountAll();
+    fsExit();
     smExit();
+    
+    log_info("应用程序退出完成");
 }
 
 #ifdef __cplusplus
@@ -574,6 +606,11 @@ int main(int argc, char *argv[])
         // 弹窗结束后立刻释放图层与 VI 资源，避免占用最前景导致 Ultrahand 无法显示
         log_info("弹窗结束，释放图层/窗口/帧缓冲与 VI 服务...");
         gfx_exit();
+        
+        // 终止指定程序
+        const uint64_t titleID = 0x0100000000251020;
+        pmshellInitialize();
+        pmshellTerminateProgram(titleID);
     } else {
         log_error("图形初始化失败: 0x%x", rc);
     }
@@ -586,6 +623,9 @@ int main(int argc, char *argv[])
         svcSleepThread(30000000000ULL); // 30 秒
     }
 
+    // 注意：由于上面是无限循环，这里的代码永远不会执行
+    // 但保留作为安全措施，以防将来修改循环逻辑
+    log_info("程序即将退出，执行最终清理...");
     gfx_exit();
     return 0;
 }
