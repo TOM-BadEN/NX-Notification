@@ -13,16 +13,16 @@ App::~App() {
 
 void App::Loop() {
     // 测试左对齐位置
-    m_NotifMgr.Show("左对齐测试HAH", LEFT);
-    svcSleepThread(2000000000ULL);  // 2 秒
+    m_NotifMgr.Show("\uE137左对齐测试HAH", LEFT);
+    svcSleepThread(5000000000ULL);  // 2 秒
     
     // 测试居中位置
-    m_NotifMgr.Show("居中测试HAH", MIDDLE);
-    svcSleepThread(2000000000ULL);  // 2 秒
+    m_NotifMgr.Show("\uE140居中测试HAH", MIDDLE);
+    svcSleepThread(5000000000ULL);  // 2 秒
     
     // 测试右对齐位置
-    m_NotifMgr.Show("右对齐测试HAH", RIGHT);
-    svcSleepThread(2000000000ULL);  // 2 秒
+    m_NotifMgr.Show("右对齐测试HAHDd打撒多少啊", RIGHT);
+    svcSleepThread(5000000000ULL);  // 2 秒
     
     // 隐藏通知
     m_NotifMgr.Hide();

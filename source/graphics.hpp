@@ -20,17 +20,33 @@ public:
     void StartFrame();
     void EndFrame();
     
+    // 圆角矩形的部分区域
+    enum class RoundedRectPart {
+        ALL,     // 全部（默认）
+        TOP,     // 只有顶部（包含上圆角）
+        BOTTOM   // 只有底部（包含下圆角）
+    };
+    
     // 绘制原语
     void SetPixel(s32 x, s32 y, Color color);
     void SetPixelBlend(s32 x, s32 y, Color color);
     void DrawRect(s32 x, s32 y, s32 w, s32 h, Color color);
     void DrawRoundedRect(s32 x, s32 y, s32 w, s32 h, s32 radius, Color color);  // 圆角矩形
+    void DrawRoundedRectPartial(s32 x, s32 y, s32 w, s32 h, s32 radius, Color color, RoundedRectPart part);  // 部分圆角矩形
     void FillScreen(Color color);
     
-    // 文本渲染（在矩形区域内水平+垂直居中）
+    // 文本水平对齐方式
+    enum class TextAlign {
+        LEFT,    // 左对齐
+        CENTER,  // 居中（默认）
+        RIGHT    // 右对齐
+    };
+    
+    // 文本渲染（在矩形区域内，垂直默认居中，水平可选对齐方式）
     // x, y: 矩形左上角坐标
     // w, h: 矩形宽度和高度
-    void DrawText(const char* text, s32 x, s32 y, s32 w, s32 h, float fontSize, Color color);
+    // align: 水平对齐方式（默认居中）
+    void DrawText(const char* text, s32 x, s32 y, s32 w, s32 h, float fontSize, Color color, TextAlign align = TextAlign::CENTER);
     
     // 文本测量
     float MeasureTextWidth(const char* text, float fontSize);

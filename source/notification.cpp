@@ -19,7 +19,7 @@
 #define SCREEN_WIDTH  1920          // 物理分辨率宽度（物理 1280）
 #define SCREEN_HEIGHT 1080          // 物理分辨率高度（物理 720）
 
-#define PANEL_FONT_SIZE  (32 * SCALE)   // 字体大小（逻辑像素）
+#define PANEL_FONT_SIZE  (28 * SCALE)   // 字体大小（逻辑像素）
 
 // libnx 内部全局变量：用于关联 ManagedLayer 和普通 Layer
 extern "C" u64 __nx_vi_layer_id;
@@ -203,15 +203,53 @@ void NotificationManager::Show(const char* text, NotificationPosition position) 
     s32 panelW = PANEL_WIDTH;    // 实际显示宽度（右侧可能有像素留空用于块线性对齐）
     s32 panelH = PANEL_HEIGHT;   // 实际显示高度
     
-    // 4. 绘制
+    // 4. 解析图标和文本
+    char iconStr[4] = "\uE137";  // 默认图标 \uE137 (UTF-8: 3字节)
+    const char* displayText = text;
+    
+    // 检查文本开头是否有 UTF-8 编码的私有区字符（U+E000-U+EFFF: \xEE\x8X\xXX）
+    if (text && (u8)text[0] == 0xEE && ((u8)text[1] & 0xF0) == 0x80) {
+        // 提取图标的 3 个 UTF-8 字节
+        iconStr[0] = text[0];
+        iconStr[1] = text[1];
+        iconStr[2] = text[2];
+        iconStr[3] = '\0';
+        
+        // 跳过图标的 3 个字节
+        displayText = text + 3;
+        
+        // 跳过图标后面的空格
+        while (*displayText == ' ') displayText++;
+    }
+    
+    // 5. 绘制
     m_Renderer.StartFrame();
     
-    // 纯白背景（圆角矩形）
-    s32 cornerRadius = 20 * SCALE;  
+    // 背景（圆角矩形）
+    s32 cornerRadius = (s32)(8 * SCALE);  
     m_Renderer.DrawRoundedRect(panelX, panelY, panelW, panelH, cornerRadius, {13, 13, 13, 15});
     
-    // 渲染黑色文本（在面板区域内自动水平+垂直居中）
-    m_Renderer.DrawText(text, panelX, panelY, panelW, panelH, PANEL_FONT_SIZE, {4, 4, 4, 15}); 
+    // 顶部高光（微妙的亮边，增加立体感，带圆角）
+    s32 highlightH = (s32)(4 * SCALE);
+    m_Renderer.DrawRoundedRectPartial(panelX, panelY, panelW, highlightH, cornerRadius, 
+                                       {15, 15, 15, 8}, GraphicsRenderer::RoundedRectPart::TOP);
+    
+    // 底部微阴影（极淡的暗边，带圆角）
+    s32 shadowH = (s32)(4 * SCALE);
+    s32 shadowY = panelY + panelH - shadowH;
+    m_Renderer.DrawRoundedRectPartial(panelX, shadowY, panelW, shadowH, cornerRadius,
+                                       {0, 0, 0, 2}, GraphicsRenderer::RoundedRectPart::BOTTOM);
+    
+    // 图标（固定在左边距 15 逻辑像素）
+    s32 iconX = (s32)(15 * SCALE);
+    s32 iconW = (s32)(40 + 15 + 15) * SCALE;
+    s32 iconSize = (s32)(40 * SCALE);
+    m_Renderer.DrawText(iconStr, iconX, panelY, iconW, panelH, iconSize, {4, 4, 4, 15});
+    
+    // 文本（图标右边，左对齐，右边留15像素边距）
+    s32 textX = iconX + iconW + (s32)(3 * SCALE);
+    s32 textW = panelW - textX - (s32)(15 * SCALE);  // 总宽度 - 文本起始X - 右边距
+    m_Renderer.DrawText(displayText, textX, panelY, textW, panelH, PANEL_FONT_SIZE, {5, 5, 5, 15}, GraphicsRenderer::TextAlign::LEFT); 
     
     m_Renderer.EndFrame();
 }

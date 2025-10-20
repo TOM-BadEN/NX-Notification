@@ -112,43 +112,60 @@ void GraphicsRenderer::DrawRect(s32 x, s32 y, s32 w, s32 h, Color color) {
 
 // 绘制圆角矩形
 void GraphicsRenderer::DrawRoundedRect(s32 x, s32 y, s32 w, s32 h, s32 radius, Color color) {
+    DrawRoundedRectPartial(x, y, w, h, radius, color, RoundedRectPart::ALL);
+}
+
+// 绘制部分圆角矩形（只有顶部或底部）
+void GraphicsRenderer::DrawRoundedRectPartial(s32 x, s32 y, s32 w, s32 h, s32 radius, Color color, RoundedRectPart part) {
     // 先绘制主体矩形
     DrawRect(x, y, w, h, color);
+    
+    // 根据 part 决定处理哪些角
+    bool processTopLeft = (part == RoundedRectPart::ALL || part == RoundedRectPart::TOP);
+    bool processTopRight = (part == RoundedRectPart::ALL || part == RoundedRectPart::TOP);
+    bool processBottomLeft = (part == RoundedRectPart::ALL || part == RoundedRectPart::BOTTOM);
+    bool processBottomRight = (part == RoundedRectPart::ALL || part == RoundedRectPart::BOTTOM);
     
     // 在四个角绘制透明遮罩，实现圆角效果
     for (s32 cy = 0; cy < radius; cy++) {
         for (s32 cx = 0; cx < radius; cx++) {
-            // 左上角：圆心在 (radius, radius)，遍历方块从 (0,0) 开始
-            float dx_tl = cx - radius + 0.5f;
-            float dy_tl = cy - radius + 0.5f;
-            float dist_tl = dx_tl * dx_tl + dy_tl * dy_tl;
-            
-            // 右上角：圆心在 (w-radius, radius)，遍历方块从 (w-radius, 0) 开始
-            float dx_tr = cx + 0.5f;  // cx 相对于方块起点
-            float dy_tr = cy - radius + 0.5f;
-            float dist_tr = dx_tr * dx_tr + dy_tr * dy_tr;
-            
-            // 左下角：圆心在 (radius, h-radius)，遍历方块从 (0, h-radius) 开始
-            float dx_bl = cx - radius + 0.5f;
-            float dy_bl = cy + 0.5f;
-            float dist_bl = dx_bl * dx_bl + dy_bl * dy_bl;
-            
-            // 右下角：圆心在 (w-radius, h-radius)，遍历方块从 (w-radius, h-radius) 开始
-            float dx_br = cx + 0.5f;
-            float dy_br = cy + 0.5f;
-            float dist_br = dx_br * dx_br + dy_br * dy_br;
-            
             float radiusSq = radius * radius;
             
-            // 如果在圆外，设置为透明
-            if (dist_tl > radiusSq)
-                SetPixel(x + cx, y + cy, {0, 0, 0, 0});
-            if (dist_tr > radiusSq)
-                SetPixel(x + w - radius + cx, y + cy, {0, 0, 0, 0});
-            if (dist_bl > radiusSq)
-                SetPixel(x + cx, y + h - radius + cy, {0, 0, 0, 0});
-            if (dist_br > radiusSq)
-                SetPixel(x + w - radius + cx, y + h - radius + cy, {0, 0, 0, 0});
+            // 左上角
+            if (processTopLeft) {
+                float dx_tl = cx - radius + 0.5f;
+                float dy_tl = cy - radius + 0.5f;
+                float dist_tl = dx_tl * dx_tl + dy_tl * dy_tl;
+                if (dist_tl > radiusSq)
+                    SetPixel(x + cx, y + cy, {0, 0, 0, 0});
+            }
+            
+            // 右上角
+            if (processTopRight) {
+                float dx_tr = cx + 0.5f;
+                float dy_tr = cy - radius + 0.5f;
+                float dist_tr = dx_tr * dx_tr + dy_tr * dy_tr;
+                if (dist_tr > radiusSq)
+                    SetPixel(x + w - radius + cx, y + cy, {0, 0, 0, 0});
+            }
+            
+            // 左下角
+            if (processBottomLeft) {
+                float dx_bl = cx - radius + 0.5f;
+                float dy_bl = cy + 0.5f;
+                float dist_bl = dx_bl * dx_bl + dy_bl * dy_bl;
+                if (dist_bl > radiusSq)
+                    SetPixel(x + cx, y + h - radius + cy, {0, 0, 0, 0});
+            }
+            
+            // 右下角
+            if (processBottomRight) {
+                float dx_br = cx + 0.5f;
+                float dy_br = cy + 0.5f;
+                float dist_br = dx_br * dx_br + dy_br * dy_br;
+                if (dist_br > radiusSq)
+                    SetPixel(x + w - radius + cx, y + h - radius + cy, {0, 0, 0, 0});
+            }
         }
     }
 }
@@ -170,8 +187,8 @@ const char* GraphicsRenderer::Utf8Next(const char* s, u32* out_cp) {
     return s + 1;
 }
 
-// 文本渲染：在矩形区域内水平+垂直居中
-void GraphicsRenderer::DrawText(const char* text, s32 x, s32 y, s32 w, s32 h, float fontSize, Color color) {
+// 文本渲染：在矩形区域内，垂直居中，水平可选对齐
+void GraphicsRenderer::DrawText(const char* text, s32 x, s32 y, s32 w, s32 h, float fontSize, Color color, TextAlign align) {
     if (!text || !m_CurrentFramebuffer) return;
     
     FontManager& fontMgr = FontManager::Instance();
@@ -180,8 +197,20 @@ void GraphicsRenderer::DrawText(const char* text, s32 x, s32 y, s32 w, s32 h, fl
     // 测量文本宽度
     float textWidth = MeasureTextWidth(text, fontSize);
     
-    // 计算水平居中位置
-    s32 startX = x + (w - (s32)textWidth) / 2;
+    // 根据对齐方式计算水平起始位置
+    s32 startX;
+    switch (align) {
+        case TextAlign::LEFT:
+            startX = x;  // 左对齐：从左边界开始
+            break;
+        case TextAlign::RIGHT:
+            startX = x + w - (s32)textWidth;  // 右对齐：从右边界减去文本宽度
+            break;
+        case TextAlign::CENTER:
+        default:
+            startX = x + (w - (s32)textWidth) / 2;  // 居中：中间位置
+            break;
+    }
     
     // 计算垂直居中位置（考虑字体的实际度量）
     int ascent, descent, lineGap;
@@ -211,34 +240,45 @@ void GraphicsRenderer::DrawText(const char* text, s32 x, s32 y, s32 w, s32 h, fl
         
         // 使用 FontManager 渲染字形
         auto glyph = fontMgr.RenderGlyph(codepoint, fontSize);
-        if (!glyph.data) continue;
         
-        // 绘制位图到屏幕（带抗锯齿）
-        for (int by = 0; by < glyph.height; by++) {
-            for (int bx = 0; bx < glyph.width; bx++) {
-                // 获取灰度值（0-255）
-                u8 coverage = glyph.data[by * glyph.width + bx];
-                if (coverage == 0) continue;  // 完全透明，跳过
-                
-                // 转换为 RGBA4444 的 alpha（0-15）
-                u8 alpha = coverage / 17;  // 255 / 15 ≈ 17
-                
-                // 创建带抗锯齿的颜色
-                Color textColor = color;
-                textColor.a = (alpha * color.a) / 15;  // 混合原始透明度
-                
-                // 绘制像素
-                s32 px = cursorX + bx + glyph.xoffset;
-                s32 py = cursorY + by + glyph.yoffset;
-                SetPixelBlend(px, py, textColor);
+        // 如果有位图数据，绘制字形
+        if (glyph.data) {
+            // 绘制位图到屏幕（带抗锯齿 + 边界裁剪）
+            for (int by = 0; by < glyph.height; by++) {
+                for (int bx = 0; bx < glyph.width; bx++) {
+                    // 计算像素位置
+                    s32 px = cursorX + bx + glyph.xoffset;
+                    s32 py = cursorY + by + glyph.yoffset;
+                    
+                    // 边界裁剪：超出矩形区域的像素不渲染
+                    if (px < x || px >= x + w || py < y || py >= y + h) {
+                        continue;
+                    }
+                    
+                    // 获取灰度值（0-255）
+                    u8 coverage = glyph.data[by * glyph.width + bx];
+                    if (coverage == 0) continue;  // 完全透明，跳过
+                    
+                    // 转换为 RGBA4444 的 alpha（0-15）
+                    u8 alpha = coverage / 17;  // 255 / 15 ≈ 17
+                    
+                    // 创建带抗锯齿的颜色
+                    Color textColor = color;
+                    textColor.a = (alpha * color.a) / 15;  // 混合原始透明度
+                    
+                    // 绘制像素
+                    SetPixelBlend(px, py, textColor);
+                }
             }
+            
+            // 释放字形位图
+            fontMgr.FreeGlyph(glyph);
         }
         
-        // 释放字形位图
-        fontMgr.FreeGlyph(glyph);
-        
-        // 移动光标到下一个字符位置（添加字符间距）
-        cursorX += glyph.advance + (s32)(3.0f); 
+        // 移动光标到下一个字符位置（无论是否有位图数据，都要前进）
+        // 空格字符不添加额外间距（空格本身就是间距）
+        s32 spacing = (codepoint == ' ') ? 0 : (s32)(3.0f);
+        cursorX += glyph.advance + spacing; 
     }
 }
 
@@ -257,8 +297,14 @@ float GraphicsRenderer::MeasureTextWidth(const char* text, float fontSize) {
         
         // 获取字形信息
         auto glyph = fontMgr.RenderGlyph(codepoint, fontSize);
+        
+        // 无论是否有位图数据，都要累加 advance（空格也占宽度）
+        // 空格字符不添加额外间距（空格本身就是间距）
+        s32 spacing = (codepoint == ' ') ? 0 : (s32)(3.0f);
+        totalWidth += glyph.advance + spacing;
+        
+        // 如果有位图数据，释放它
         if (glyph.data) {
-            totalWidth += glyph.advance + (s32)(3.0f);  // 包含字符间距
             fontMgr.FreeGlyph(glyph);
         }
     }

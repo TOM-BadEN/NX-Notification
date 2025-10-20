@@ -32,6 +32,9 @@ public:
     // 获取本地化字体（中文/韩文等，根据系统语言）
     stbtt_fontinfo* GetLocalFont() { return &m_FontLocal; }
     
+    // 获取扩展字体（任天堂图标和特殊符号）
+    stbtt_fontinfo* GetExtFont() { return &m_FontExt; }
+    
     // 计算缩放比例，使 fontSize 代表实际可见字符高度（公开给 GraphicsRenderer 使用）
     float CalculateScaleForVisibleHeight(stbtt_fontinfo* font, float fontSize) {
         // 获取大写字母 'H' 的边界框
@@ -89,15 +92,21 @@ public:
     
 private:
     // 构造函数：加载所有字体
-    FontManager() : m_HasLocalFont(false) {
+    FontManager() : m_HasLocalFont(false), m_HasExtFont(false) {
         PlFontData font;
         
-        // 1. 加载标准字体（英文、数字）
+        // 1. 加载标准字体（英文、数字、基本符号）
         if (R_SUCCEEDED(plGetSharedFontByType(&font, PlSharedFontType_Standard))) {
             stbtt_InitFont(&m_FontStd, (u8*)font.address, stbtt_GetFontOffsetForIndex((u8*)font.address, 0));
         }
         
-        // 2. 根据系统语言加载本地化字体
+        // 2. 加载任天堂扩展字体（图标和特殊符号）
+        if (R_SUCCEEDED(plGetSharedFontByType(&font, PlSharedFontType_NintendoExt))) {
+            stbtt_InitFont(&m_FontExt, (u8*)font.address, stbtt_GetFontOffsetForIndex((u8*)font.address, 0));
+            m_HasExtFont = true;
+        }
+        
+        // 3. 根据系统语言加载本地化字体
         u64 langCode = 0;
         
         if (R_SUCCEEDED(setGetSystemLanguage(&langCode))) {
@@ -136,19 +145,27 @@ private:
     FontManager(const FontManager&) = delete;
     FontManager& operator=(const FontManager&) = delete;
     
-    // 根据码点选择字体
+    // 根据码点选择字体（优先级：本地化 > 扩展 > 标准）
     stbtt_fontinfo* PickFontForCodepoint(u32 codepoint) {
-        // 只有本地化字体已加载时才检查
+        // 1. 优先检查本地化字体（中文、韩文等）
         if (m_HasLocalFont && stbtt_FindGlyphIndex(&m_FontLocal, (int)codepoint) != 0) {
             return &m_FontLocal;
         }
-        // 回退到标准字体
+        
+        // 2. 检查扩展字体（图标和特殊符号）
+        if (m_HasExtFont && stbtt_FindGlyphIndex(&m_FontExt, (int)codepoint) != 0) {
+            return &m_FontExt;
+        }
+        
+        // 3. 回退到标准字体
         return &m_FontStd;
     }
     
     // 字体对象（只保存指向系统共享内存的指针，不占用大量内存）
-    stbtt_fontinfo m_FontStd;      // 标准字体
-    stbtt_fontinfo m_FontLocal;    // 本地化字体
+    stbtt_fontinfo m_FontStd;      // 标准字体（英文、数字、基本符号）
+    stbtt_fontinfo m_FontLocal;    // 本地化字体（中文、韩文等）
+    stbtt_fontinfo m_FontExt;      // 扩展字体（任天堂图标和特殊符号）
     bool m_HasLocalFont;           // 本地化字体是否已加载
+    bool m_HasExtFont;             // 扩展字体是否已加载
 };
 
