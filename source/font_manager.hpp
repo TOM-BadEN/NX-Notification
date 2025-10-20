@@ -32,6 +32,25 @@ public:
     // 获取本地化字体（中文/韩文等，根据系统语言）
     stbtt_fontinfo* GetLocalFont() { return &m_FontLocal; }
     
+    // 计算缩放比例，使 fontSize 代表实际可见字符高度（公开给 GraphicsRenderer 使用）
+    float CalculateScaleForVisibleHeight(stbtt_fontinfo* font, float fontSize) {
+        // 获取大写字母 'H' 的边界框
+        int x0, y0, x1, y1;
+        stbtt_GetCodepointBox(font, 'H', &x0, &y0, &x1, &y1);
+        
+        float capHeight = y1 - y0;  // 字体单位下的大写字母高度
+        
+        // 如果获取失败，使用字体度量估算
+        if (capHeight <= 0) {
+            int ascent, descent, lineGap;
+            stbtt_GetFontVMetrics(font, &ascent, &descent, &lineGap);
+            capHeight = ascent * 0.7f;  // 大写字母约占 ascent 的 70%
+        }
+        
+        // 返回缩放比例，使 capHeight 缩放后等于 fontSize
+        return fontSize / capHeight;
+    }
+    
     // 根据码点渲染字形位图（自动选择字体）
     GlyphBitmap RenderGlyph(u32 codepoint, float fontSize) {
         GlyphBitmap glyph = {nullptr, 0, 0, 0, 0, 0};
@@ -40,8 +59,8 @@ public:
         stbtt_fontinfo* font = PickFontForCodepoint(codepoint);
         if (!font) return glyph;
         
-        // 计算缩放比例
-        float scale = stbtt_ScaleForPixelHeight(font, fontSize);
+        // 计算缩放比例（基于大写字母高度，让 fontSize 代表实际可见高度）
+        float scale = CalculateScaleForVisibleHeight(font, fontSize);
         
         // 获取字形位图
         glyph.data = stbtt_GetCodepointBitmap(

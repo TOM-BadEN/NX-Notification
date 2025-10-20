@@ -12,11 +12,17 @@ App::~App() {
 }
 
 void App::Loop() {
-    // 显示通知（白色文字 "Hello"）
-    m_NotifMgr.Show("你好，世界");
+    // 测试左对齐位置
+    m_NotifMgr.Show("左对齐测试HAH", LEFT);
+    svcSleepThread(2000000000ULL);  // 2 秒
     
-    // 等待 2 秒
-    svcSleepThread(2000000000ULL);  // 2 秒 = 2,000,000,000 纳秒
+    // 测试居中位置
+    m_NotifMgr.Show("居中测试HAH", MIDDLE);
+    svcSleepThread(2000000000ULL);  // 2 秒
+    
+    // 测试右对齐位置
+    m_NotifMgr.Show("右对齐测试HAH", RIGHT);
+    svcSleepThread(2000000000ULL);  // 2 秒
     
     // 隐藏通知
     m_NotifMgr.Hide();

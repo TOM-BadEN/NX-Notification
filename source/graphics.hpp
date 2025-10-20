@@ -24,10 +24,16 @@ public:
     void SetPixel(s32 x, s32 y, Color color);
     void SetPixelBlend(s32 x, s32 y, Color color);
     void DrawRect(s32 x, s32 y, s32 w, s32 h, Color color);
+    void DrawRoundedRect(s32 x, s32 y, s32 w, s32 h, s32 radius, Color color);  // 圆角矩形
     void FillScreen(Color color);
     
-    // 文本渲染
-    void DrawText(const char* text, s32 x, s32 y, float fontSize, Color color);
+    // 文本渲染（在矩形区域内水平+垂直居中）
+    // x, y: 矩形左上角坐标
+    // w, h: 矩形宽度和高度
+    void DrawText(const char* text, s32 x, s32 y, s32 w, s32 h, float fontSize, Color color);
+    
+    // 文本测量
+    float MeasureTextWidth(const char* text, float fontSize);
     
     // 颜色工具（静态，可以独立使用）
     static inline u16 ColorToU16(Color c);

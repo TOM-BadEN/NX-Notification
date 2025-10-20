@@ -1,5 +1,25 @@
 #include "notification.hpp"
-#include <switch/services/hiddbg.h>
+
+// 缩放比例（逻辑分辨率 / 物理分辨率 = 1920 / 1280 = 1.5）
+#define SCALE 1.5f
+
+// 面板实际显示尺寸（物理像素，屏幕上看到的大小）
+#define PANEL_WIDTH  (400 * SCALE)   // 400 物理像素 = 600 逻辑像素
+#define PANEL_HEIGHT (100 * SCALE)   // 130 物理像素 = 195 逻辑像素
+
+// Framebuffer 尺寸（必须满足块线性布局要求：宽度是 32 的倍数）
+#define FB_WIDTH  (((int)PANEL_WIDTH + 31) / 32 * 32)  // 自动向上取整到 32 的倍数
+#define FB_HEIGHT ((int)PANEL_HEIGHT)
+
+// 面板位置配置（物理像素）
+#define PANEL_MARGIN_TOP  (50 * SCALE)   // 50 物理像素 = 75 逻辑像素
+#define PANEL_MARGIN_SIDE (50 * SCALE)   // 50 物理像素 = 75 逻辑像素
+
+// 屏幕尺寸常量（Layer 逻辑分辨率）
+#define SCREEN_WIDTH  1920          // 物理分辨率宽度（物理 1280）
+#define SCREEN_HEIGHT 1080          // 物理分辨率高度（物理 720）
+
+#define PANEL_FONT_SIZE  (32 * SCALE)   // 字体大小（逻辑像素）
 
 // libnx 内部全局变量：用于关联 ManagedLayer 和普通 Layer
 extern "C" u64 __nx_vi_layer_id;
@@ -15,8 +35,8 @@ Result NotificationManager::ViAddToLayerStack(ViLayer* layer, ViLayerStack stack
 
 // 构造函数：轻量级初始化，不涉及系统服务
 NotificationManager::NotificationManager() 
-    : m_FramebufferWidth(448)
-    , m_FramebufferHeight(720)
+    : m_FramebufferWidth(FB_WIDTH)    // 使用宏定义（自动对齐到 32 的倍数）
+    , m_FramebufferHeight(FB_HEIGHT)  // 使用宏定义
     , m_Initialized(false)
     , m_IsVisible(false)
 {
@@ -48,11 +68,11 @@ Result NotificationManager::Init() {
     bool layerCreated = false;      // 图层是否已创建
     bool windowCreated = false;     // 窗口是否已创建
     
-    // 1. 计算图层尺寸和位置（保持宽高比，屏幕居中）
-    m_LayerHeight = 1080;  // 填满屏幕高度
-    m_LayerWidth = (u16)(1080 * ((float)m_FramebufferWidth / (float)m_FramebufferHeight));
-    m_LayerPosX = (1280 - m_LayerWidth) / 2;  // 水平居中
-    m_LayerPosY = 0;
+    // 1. 设置图层尺寸和位置（使用宏定义）
+    m_LayerWidth = FB_WIDTH;                         // 实际显示宽度
+    m_LayerHeight = FB_HEIGHT;                       // 实际显示高度
+    m_LayerPosX = (SCREEN_WIDTH - FB_WIDTH) / 2;    // 初始居中位置
+    m_LayerPosY = PANEL_MARGIN_TOP;                     // 距屏幕顶部距离
     
     // 2. 初始化 VI 服务
     rc = viInitialize(ViServiceType_Manager);
@@ -150,29 +170,48 @@ void NotificationManager::RestoreSystemInput() {
 }
 
 // 显示通知弹窗
-void NotificationManager::Show(const char* text) {
+void NotificationManager::Show(const char* text, NotificationPosition position) {
     if (!m_Initialized) return;
 
     // 恢复系统输入焦点
     RestoreSystemInput();
     
-    // 计算面板布局（业务逻辑）
-    s32 panelX = 100;
-    s32 panelY = 300;
-    s32 panelW = 248;  // 448 - 100*2
-    s32 panelH = 120;
+    // 1. 根据位置计算 Layer 屏幕坐标（使用宏定义）
+    s32 layerScreenX;
+    s32 layerScreenY = PANEL_MARGIN_TOP;  // 垂直固定距顶部
     
-    // 绘制
+    switch (position) {
+        case LEFT:  // 左对齐
+            layerScreenX = PANEL_MARGIN_SIDE;
+            break;
+        case MIDDLE:  // 居中
+            layerScreenX = (SCREEN_WIDTH - PANEL_WIDTH) / 2;
+            break;
+        case RIGHT:  // 右对齐
+            layerScreenX = SCREEN_WIDTH - PANEL_WIDTH - PANEL_MARGIN_SIDE;
+            break;
+        default:
+            layerScreenX = (SCREEN_WIDTH - PANEL_WIDTH) / 2;  // 默认居中
+    }
+    
+    // 2. 更新 Layer 位置
+    viSetLayerPosition(&m_Layer, layerScreenX, layerScreenY);
+    
+    // 3. 面板布局（使用宏定义）
+    s32 panelX = 0;              // 从 Framebuffer 左边开始
+    s32 panelY = 0;              // 从 Framebuffer 顶部开始
+    s32 panelW = PANEL_WIDTH;    // 实际显示宽度（右侧可能有像素留空用于块线性对齐）
+    s32 panelH = PANEL_HEIGHT;   // 实际显示高度
+    
+    // 4. 绘制
     m_Renderer.StartFrame();
-    m_Renderer.FillScreen({0, 0, 0, 0});
-    m_Renderer.DrawRect(panelX, panelY, panelW, panelH, {0, 0, 0, 12});
-    m_Renderer.DrawRect(panelX, panelY, panelW, 2, {15, 15, 15, 15});
-    m_Renderer.DrawRect(panelX, panelY + panelH - 2, panelW, 2, {15, 15, 15, 15});
-    m_Renderer.DrawRect(panelX, panelY, 2, panelH, {15, 15, 15, 15});
-    m_Renderer.DrawRect(panelX + panelW - 2, panelY, 2, panelH, {15, 15, 15, 15});
     
-    // 渲染文本
-    m_Renderer.DrawText(text, panelX + 10, panelY + 10, 28.0f, {15, 15, 15, 15});
+    // 纯白背景（圆角矩形）
+    s32 cornerRadius = 20 * SCALE;  
+    m_Renderer.DrawRoundedRect(panelX, panelY, panelW, panelH, cornerRadius, {13, 13, 13, 15});
+    
+    // 渲染黑色文本（在面板区域内自动水平+垂直居中）
+    m_Renderer.DrawText(text, panelX, panelY, panelW, panelH, PANEL_FONT_SIZE, {4, 4, 4, 15}); 
     
     m_Renderer.EndFrame();
 }

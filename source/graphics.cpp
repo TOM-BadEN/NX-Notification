@@ -93,7 +93,7 @@ void GraphicsRenderer::SetPixelBlend(s32 x, s32 y, Color color) {
     SetPixel(x, y, out);
 }
 
-// 绘制矩形
+// 绘制矩形（混合模式）
 void GraphicsRenderer::DrawRect(s32 x, s32 y, s32 w, s32 h, Color color) {
     s32 x2 = x + w;
     s32 y2 = y + h;
@@ -106,6 +106,49 @@ void GraphicsRenderer::DrawRect(s32 x, s32 y, s32 w, s32 h, Color color) {
     for (s32 xi = x; xi < x2; ++xi) {
         for (s32 yi = y; yi < y2; ++yi) {
             SetPixelBlend(xi, yi, color);
+        }
+    }
+}
+
+// 绘制圆角矩形
+void GraphicsRenderer::DrawRoundedRect(s32 x, s32 y, s32 w, s32 h, s32 radius, Color color) {
+    // 先绘制主体矩形
+    DrawRect(x, y, w, h, color);
+    
+    // 在四个角绘制透明遮罩，实现圆角效果
+    for (s32 cy = 0; cy < radius; cy++) {
+        for (s32 cx = 0; cx < radius; cx++) {
+            // 左上角：圆心在 (radius, radius)，遍历方块从 (0,0) 开始
+            float dx_tl = cx - radius + 0.5f;
+            float dy_tl = cy - radius + 0.5f;
+            float dist_tl = dx_tl * dx_tl + dy_tl * dy_tl;
+            
+            // 右上角：圆心在 (w-radius, radius)，遍历方块从 (w-radius, 0) 开始
+            float dx_tr = cx + 0.5f;  // cx 相对于方块起点
+            float dy_tr = cy - radius + 0.5f;
+            float dist_tr = dx_tr * dx_tr + dy_tr * dy_tr;
+            
+            // 左下角：圆心在 (radius, h-radius)，遍历方块从 (0, h-radius) 开始
+            float dx_bl = cx - radius + 0.5f;
+            float dy_bl = cy + 0.5f;
+            float dist_bl = dx_bl * dx_bl + dy_bl * dy_bl;
+            
+            // 右下角：圆心在 (w-radius, h-radius)，遍历方块从 (w-radius, h-radius) 开始
+            float dx_br = cx + 0.5f;
+            float dy_br = cy + 0.5f;
+            float dist_br = dx_br * dx_br + dy_br * dy_br;
+            
+            float radiusSq = radius * radius;
+            
+            // 如果在圆外，设置为透明
+            if (dist_tl > radiusSq)
+                SetPixel(x + cx, y + cy, {0, 0, 0, 0});
+            if (dist_tr > radiusSq)
+                SetPixel(x + w - radius + cx, y + cy, {0, 0, 0, 0});
+            if (dist_bl > radiusSq)
+                SetPixel(x + cx, y + h - radius + cy, {0, 0, 0, 0});
+            if (dist_br > radiusSq)
+                SetPixel(x + w - radius + cx, y + h - radius + cy, {0, 0, 0, 0});
         }
     }
 }
@@ -127,14 +170,38 @@ const char* GraphicsRenderer::Utf8Next(const char* s, u32* out_cp) {
     return s + 1;
 }
 
-// 文本渲染：将文本绘制到屏幕
-void GraphicsRenderer::DrawText(const char* text, s32 x, s32 y, float fontSize, Color color) {
+// 文本渲染：在矩形区域内水平+垂直居中
+void GraphicsRenderer::DrawText(const char* text, s32 x, s32 y, s32 w, s32 h, float fontSize, Color color) {
     if (!text || !m_CurrentFramebuffer) return;
     
-    s32 cursorX = x;
-    s32 cursorY = y;
-    
     FontManager& fontMgr = FontManager::Instance();
+    stbtt_fontinfo* font = fontMgr.GetStdFont();
+    
+    // 测量文本宽度
+    float textWidth = MeasureTextWidth(text, fontSize);
+    
+    // 计算水平居中位置
+    s32 startX = x + (w - (s32)textWidth) / 2;
+    
+    // 计算垂直居中位置（考虑字体的实际度量）
+    int ascent, descent, lineGap;
+    stbtt_GetFontVMetrics(font, &ascent, &descent, &lineGap);
+    
+    // 使用与 RenderGlyph 相同的缩放方式
+    float scale = fontMgr.CalculateScaleForVisibleHeight(font, fontSize);
+    
+    // 实际的 ascent 和 descent（像素，descent 是负值）
+    float actualAscent = ascent * scale;
+    float actualDescent = descent * scale;  // 保持负值
+    
+    // 字体的视觉中心距离基线的偏移（向上为正）
+    float visualCenterOffset = (actualAscent + actualDescent) / 2.0f;
+    
+    // 基线位置 = 面板中心 + 视觉中心偏移
+    s32 startY = y + h / 2 + (s32)visualCenterOffset;
+    
+    s32 cursorX = startX;
+    s32 cursorY = startY;
     
     // 逐字符解析和渲染
     while (*text) {
@@ -170,8 +237,32 @@ void GraphicsRenderer::DrawText(const char* text, s32 x, s32 y, float fontSize, 
         // 释放字形位图
         fontMgr.FreeGlyph(glyph);
         
-        // 移动光标到下一个字符位置
-        cursorX += glyph.advance;
+        // 移动光标到下一个字符位置（添加字符间距）
+        cursorX += glyph.advance + (s32)(3.0f); 
     }
+}
+
+// 测量文本宽度
+float GraphicsRenderer::MeasureTextWidth(const char* text, float fontSize) {
+    if (!text) return 0.0f;
+    
+    float totalWidth = 0.0f;
+    FontManager& fontMgr = FontManager::Instance();
+    
+    // 逐字符测量
+    while (*text) {
+        u32 codepoint;
+        text = Utf8Next(text, &codepoint);
+        if (codepoint == 0) break;
+        
+        // 获取字形信息
+        auto glyph = fontMgr.RenderGlyph(codepoint, fontSize);
+        if (glyph.data) {
+            totalWidth += glyph.advance + (s32)(3.0f);  // 包含字符间距
+            fontMgr.FreeGlyph(glyph);
+        }
+    }
+    
+    return totalWidth;
 }
 
