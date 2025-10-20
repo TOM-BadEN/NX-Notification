@@ -38,9 +38,11 @@ void __appInit(void) {
     fsdevMountSdmc();                                     // 挂载SD卡(非核心依赖，所以不检查)
     ASSERT_FATAL(plInitialize(PlServiceType_User));       // 初始化本地化服务(字体)
     ASSERT_FATAL(setInitialize());                        // 初始化设置服务(系统语言)
+    ASSERT_FATAL(hiddbgInitialize());                     // 初始化 HID 调试服务(模拟触屏)
 }
 
 void __appExit(void) {
+    hiddbgExit();
     setExit();          
     plExit();           
     fsdevUnmountAll();  

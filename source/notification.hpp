@@ -43,4 +43,7 @@ private:
     
     // 将图层添加到显示栈
     static Result ViAddToLayerStack(ViLayer* layer, ViLayerStack stack);
+    
+    // 恢复系统输入焦点（模拟触屏点击）
+    void RestoreSystemInput();
 };

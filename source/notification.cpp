@@ -1,4 +1,5 @@
 #include "notification.hpp"
+#include <switch/services/hiddbg.h>
 
 // libnx 内部全局变量：用于关联 ManagedLayer 和普通 Layer
 extern "C" u64 __nx_vi_layer_id;
@@ -134,9 +135,26 @@ cleanup:
     return rc;
 }
 
+// 恢复系统输入焦点（模拟触屏点击屏幕右上角）
+void NotificationManager::RestoreSystemInput() {
+    HidTouchState touch = {0};
+    touch.x = 1280 - 50;  // 屏幕右上角 X（距离右边 50 像素）
+    touch.y = 50;         // 屏幕右上角 Y（距离顶部 50 像素）
+    touch.finger_id = 0;
+    touch.diameter_x = 15;
+    touch.diameter_y = 15;
+    
+    hiddbgSetTouchScreenAutoPilotState(&touch, 1);
+    svcSleepThread(20000000ULL);  // 20ms
+    hiddbgUnsetTouchScreenAutoPilotState();
+}
+
 // 显示通知弹窗
 void NotificationManager::Show(const char* text) {
     if (!m_Initialized) return;
+
+    // 恢复系统输入焦点
+    RestoreSystemInput();
     
     // 计算面板布局（业务逻辑）
     s32 panelX = 100;
