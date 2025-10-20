@@ -169,104 +169,87 @@ void NotificationManager::RestoreSystemInput() {
     hiddbgUnsetTouchScreenAutoPilotState();
 }
 
+// 绘制通知内容（不包含动画）
+void NotificationManager::DrawNotificationContent(s32 drawX, s32 drawY, const char* iconStr, const char* displayText) {
+    // 面板布局
+    s32 panelW = PANEL_WIDTH;
+    s32 panelH = PANEL_HEIGHT;
+    
+    // 背景（圆角矩形）
+    s32 cornerRadius = (s32)(8 * SCALE);  
+    m_Renderer.DrawRoundedRect(drawX, drawY, panelW, panelH, cornerRadius, {13, 13, 13, 15});
+    
+    // 顶部高光
+    s32 highlightH = (s32)(4 * SCALE);
+    m_Renderer.DrawRoundedRectPartial(drawX, drawY, panelW, highlightH, cornerRadius, 
+                                       {15, 15, 15, 8}, GraphicsRenderer::RoundedRectPart::TOP);
+    
+    // 底部微阴影
+    s32 shadowH = (s32)(4 * SCALE);
+    s32 shadowY = drawY + panelH - shadowH;
+    m_Renderer.DrawRoundedRectPartial(drawX, shadowY, panelW, shadowH, cornerRadius,
+                                       {0, 0, 0, 2}, GraphicsRenderer::RoundedRectPart::BOTTOM);
+    
+    // 图标
+    s32 iconX = drawX + (s32)(15 * SCALE);
+    s32 iconW = (s32)(40 + 15 + 15) * SCALE;
+    s32 iconSize = (s32)(40 * SCALE);
+    m_Renderer.DrawText(iconStr, iconX, drawY, iconW, panelH, iconSize, {4, 4, 4, 15});
+    
+    // 文本
+    s32 textX = iconX + iconW + (s32)(3 * SCALE);
+    s32 textW = panelW - (textX - drawX) - (s32)(15 * SCALE);
+    m_Renderer.DrawText(displayText, textX, drawY, textW, panelH, PANEL_FONT_SIZE, {5, 5, 5, 15}, GraphicsRenderer::TextAlign::LEFT);
+}
+
 // 显示通知弹窗
 void NotificationManager::Show(const char* text, NotificationPosition position) {
     if (!m_Initialized) return;
-
+    // 代表弹窗显示中
+    m_IsVisible = true;
     // 恢复系统输入焦点
     RestoreSystemInput();
     
-    // 1. 根据位置计算最终 Layer 坐标
-    s32 targetX;
-    s32 targetY = PANEL_MARGIN_TOP;
-    
-    switch (position) {
-        case LEFT:  // 左对齐
-            targetX = PANEL_MARGIN_SIDE;
-            break;
-        case MIDDLE:  // 居中
-            targetX = (SCREEN_WIDTH - PANEL_WIDTH) / 2;
-            break;
-        case RIGHT:  // 右对齐
-            targetX = SCREEN_WIDTH - PANEL_WIDTH - PANEL_MARGIN_SIDE;
-            break;
-        default:
-            targetX = (SCREEN_WIDTH - PANEL_WIDTH) / 2;  // 默认居中
-    }
-    
-    // 3. 面板布局（使用宏定义）
-    s32 panelX = 0;              // 从 Framebuffer 左边开始
-    s32 panelY = 0;              // 从 Framebuffer 顶部开始
-    s32 panelW = PANEL_WIDTH;    // 实际显示宽度（右侧可能有像素留空用于块线性对齐）
-    s32 panelH = PANEL_HEIGHT;   // 实际显示高度
-    
-    // 4. 解析图标和文本
-    char iconStr[4] = "\uE137";  // 默认图标 \uE137 (UTF-8: 3字节)
+    // 提前解析图标和文本
+    char iconStr[4] = "\uE137";  // 默认图标
     const char* displayText = text;
     
-    // 检查文本开头是否有 UTF-8 编码的私有区字符（U+E000-U+EFFF: \xEE\x8X\xXX）
     if (text && (u8)text[0] == 0xEE && ((u8)text[1] & 0xF0) == 0x80) {
-        // 提取图标的 3 个 UTF-8 字节
         iconStr[0] = text[0];
         iconStr[1] = text[1];
         iconStr[2] = text[2];
         iconStr[3] = '\0';
-        
-        // 跳过图标的 3 个字节
         displayText = text + 3;
-        
-        // 跳过图标后面的空格
         while (*displayText == ' ') displayText++;
     }
     
-    // 8. 绘制
-    m_Renderer.StartFrame();
+    // 根据位置执行对应的动画
+    s32 targetY = PANEL_MARGIN_TOP;
     
-    // 背景（圆角矩形）
-    s32 cornerRadius = (s32)(8 * SCALE);  
-    m_Renderer.DrawRoundedRect(panelX, panelY, panelW, panelH, cornerRadius, {13, 13, 13, 15});
-    
-    // 顶部高光（微妙的亮边，增加立体感，带圆角）
-    s32 highlightH = (s32)(4 * SCALE);
-    m_Renderer.DrawRoundedRectPartial(panelX, panelY, panelW, highlightH, cornerRadius, 
-                                       {15, 15, 15, 8}, GraphicsRenderer::RoundedRectPart::TOP);
-    
-    // 底部微阴影（极淡的暗边，带圆角）
-    s32 shadowH = (s32)(4 * SCALE);
-    s32 shadowY = panelY + panelH - shadowH;
-    m_Renderer.DrawRoundedRectPartial(panelX, shadowY, panelW, shadowH, cornerRadius,
-                                       {0, 0, 0, 2}, GraphicsRenderer::RoundedRectPart::BOTTOM);
-    
-    // 图标（固定在左边距 15 逻辑像素）
-    s32 iconX = (s32)(15 * SCALE);
-    s32 iconW = (s32)(40 + 15 + 15) * SCALE;
-    s32 iconSize = (s32)(40 * SCALE);
-    m_Renderer.DrawText(iconStr, iconX, panelY, iconW, panelH, iconSize, {4, 4, 4, 15});
-    
-    // 文本（图标右边，左对齐，右边留15像素边距）
-    s32 textX = iconX + iconW + (s32)(3 * SCALE);
-    s32 textW = panelW - textX - (s32)(15 * SCALE);  // 总宽度 - 文本起始X - 右边距
-    m_Renderer.DrawText(displayText, textX, panelY, textW, panelH, PANEL_FONT_SIZE, {5, 5, 5, 15}, GraphicsRenderer::TextAlign::LEFT); 
-    
-    m_Renderer.EndFrame();
-    
-    // 2. 执行动画（根据位置选择不同动画）
     switch (position) {
-        case LEFT:
-            AnimateFromLeft(targetX, targetY);
+        case LEFT: {
+            s32 targetX = PANEL_MARGIN_SIDE;
+            AnimateFromLeft(targetX, targetY, iconStr, displayText);
             break;
-        case RIGHT:
-            AnimateFromRight(targetX, targetY);
+        }
+        case RIGHT: {
+            s32 targetX = SCREEN_WIDTH - PANEL_WIDTH - PANEL_MARGIN_SIDE;
+            AnimateFromRight(targetX, targetY, iconStr, displayText);
             break;
-        case MIDDLE:
-            AnimateExpand(targetX, targetY);  // 暂时只是设置位置
+        }
+        case MIDDLE: {
+            s32 targetX = (SCREEN_WIDTH - PANEL_WIDTH) / 2;
+            AnimateExpand(targetX, targetY, iconStr, displayText);
             break;
-        default:
+        }
+        default: {
+            s32 targetX = (SCREEN_WIDTH - PANEL_WIDTH) / 2;
             viSetLayerPosition(&m_Layer, targetX, targetY);
             break;
+        }
     }
     
-    m_IsVisible = true;
+    
 }
 
 // 隐藏通知弹窗
@@ -283,59 +266,142 @@ void NotificationManager::Hide() {
     m_IsVisible = false;
 }
 
-// ==================== 动画函数 ====================
+
 
 // 缓动函数：快进慢出（EaseOutCubic）
 float NotificationManager::EaseOutCubic(float t) {
     float f = t - 1.0f;
     return f * f * f + 1.0f;
 }
-// 左边滑入动画
-void NotificationManager::AnimateFromLeft(s32 targetX, s32 targetY) {
-    const int ANIMATION_FRAMES = 120;
-    const u64 FRAME_TIME = 16666667;  // 16.6ms (60fps)
-    
-    s32 startX = -PANEL_WIDTH;  // 从左边屏幕外开始
-    
-    for (int i = 0; i <= ANIMATION_FRAMES; i++) {
-        float t = (float)i / ANIMATION_FRAMES;
-        float progress = EaseOutCubic(t);
-        
-        s32 currentX = startX + (s32)((targetX - startX) * progress);
-        
-        viSetLayerPosition(&m_Layer, currentX, targetY);
-        svcSleepThread(FRAME_TIME);
-    }
-    
-    // 确保最终位置准确
-    viSetLayerPosition(&m_Layer, targetX, targetY);
-}
-
-// 右边滑入动画
-void NotificationManager::AnimateFromRight(s32 targetX, s32 targetY) {
+// 左边滑入动画（特斯拉逐帧绘制方式）
+void NotificationManager::AnimateFromLeft(s32 targetX, s32 targetY, const char* iconStr, const char* displayText) {
     const int ANIMATION_FRAMES = 15;
-    const u64 FRAME_TIME = 16666667;  // 16.6ms (60fps)
+    const s32 SLIDE_DURATION_MS = 250;  // 250ms 滑入时间
     
-    s32 startX = SCREEN_WIDTH;  // 从右边屏幕外开始
+    // Layer 固定在目标位置
+    viSetLayerPosition(&m_Layer, targetX, targetY);
+    eventWait(&m_VsyncEvent, UINT64_MAX);
     
+    // 动画循环
+    u64 startTime = armTicksToNs(armGetSystemTick());
     for (int i = 0; i <= ANIMATION_FRAMES; i++) {
-        float t = (float)i / ANIMATION_FRAMES;
+        u64 now = armTicksToNs(armGetSystemTick());
+        u64 elapsedMs = (now - startTime) / 1'000'000ULL;
+        float t = (float)elapsedMs / SLIDE_DURATION_MS;
+        if (t > 1.0f) t = 1.0f;
+        
         float progress = EaseOutCubic(t);
         
-        s32 currentX = startX + (s32)((targetX - startX) * progress);
+        // 计算绘制坐标（从 -PANEL_WIDTH 滑到 0）
+        s32 drawX = (s32)(-PANEL_WIDTH + progress * PANEL_WIDTH);
         
-        viSetLayerPosition(&m_Layer, currentX, targetY);
-        svcSleepThread(FRAME_TIME);
+        // 计算裁剪区域
+        s32 scissorX = (drawX < 0) ? 0 : drawX;
+        s32 scissorW = (drawX < 0) ? (PANEL_WIDTH + drawX) : PANEL_WIDTH;
+        if (scissorW <= 0) {
+            svcSleepThread(16666667);  // 16.6ms
+            continue;
+        }
+        
+        // 每帧清空+绘制
+        m_Renderer.StartFrame();
+        m_Renderer.FillScreen({0, 0, 0, 0});
+        m_Renderer.EnableScissoring(scissorX, 0, scissorW, PANEL_HEIGHT);
+        DrawNotificationContent(drawX, 0, iconStr, displayText);
+        m_Renderer.DisableScissoring();
+        m_Renderer.EndFrame();
+        
+        if (t >= 1.0f) break;
+        svcSleepThread(16666667);  // 16.6ms
     }
-    
-    // 确保最终位置准确
-    viSetLayerPosition(&m_Layer, targetX, targetY);
 }
 
-// 中间展开动画（未实现，占位）
-void NotificationManager::AnimateExpand(s32 targetX, s32 targetY) {
-    // TODO: 实现展开动画
-    // 暂时直接设置位置，不做动画
+// 右边滑入动画（特斯拉逐帧绘制方式）
+void NotificationManager::AnimateFromRight(s32 targetX, s32 targetY, const char* iconStr, const char* displayText) {
+    const int ANIMATION_FRAMES = 15;
+    const s32 SLIDE_DURATION_MS = 250;  // 250ms 滑入时间
+    
+    // Layer 固定在目标位置
     viSetLayerPosition(&m_Layer, targetX, targetY);
+    eventWait(&m_VsyncEvent, UINT64_MAX);
+    
+    // 动画循环
+    u64 startTime = armTicksToNs(armGetSystemTick());
+    for (int i = 0; i <= ANIMATION_FRAMES; i++) {
+        u64 now = armTicksToNs(armGetSystemTick());
+        u64 elapsedMs = (now - startTime) / 1'000'000ULL;
+        float t = (float)elapsedMs / SLIDE_DURATION_MS;
+        if (t > 1.0f) t = 1.0f;
+        
+        float progress = EaseOutCubic(t);
+        
+        // 计算绘制坐标（从 PANEL_WIDTH 滑到 0）
+        s32 drawX = (s32)(PANEL_WIDTH - progress * PANEL_WIDTH);
+        
+        // 计算裁剪区域
+        s32 scissorX = drawX;
+        s32 scissorW = PANEL_WIDTH - drawX;
+        if (scissorW <= 0 || scissorX >= (s32)PANEL_WIDTH) {
+            svcSleepThread(16666667);  // 16.6ms
+            continue;
+        }
+        
+        // 每帧清空+绘制
+        m_Renderer.StartFrame();
+        m_Renderer.FillScreen({0, 0, 0, 0});
+        m_Renderer.EnableScissoring(scissorX, 0, scissorW, PANEL_HEIGHT);
+        DrawNotificationContent(drawX, 0, iconStr, displayText);
+        m_Renderer.DisableScissoring();
+        m_Renderer.EndFrame();
+        
+        if (t >= 1.0f) break;
+        svcSleepThread(16666667);  // 16.6ms
+    }
+}
+
+// 中间展开动画（从中心向两边扩展）
+void NotificationManager::AnimateExpand(s32 targetX, s32 targetY, const char* iconStr, const char* displayText) {
+    const int ANIMATION_FRAMES = 15;
+    const s32 EXPAND_DURATION_MS = 400;  // 400ms 展开时间
+    
+    // Layer 固定在目标位置
+    viSetLayerPosition(&m_Layer, targetX, targetY);
+    eventWait(&m_VsyncEvent, UINT64_MAX);
+    
+    // 动画循环
+    u64 startTime = armTicksToNs(armGetSystemTick());
+    for (int i = 0; i <= ANIMATION_FRAMES; i++) {
+        u64 now = armTicksToNs(armGetSystemTick());
+        u64 elapsedMs = (now - startTime) / 1'000'000ULL;
+        float t = (float)elapsedMs / EXPAND_DURATION_MS;
+        if (t > 1.0f) t = 1.0f;
+        
+        float progress = EaseOutCubic(t);
+        
+        // 计算当前宽度（从 0 扩展到 PANEL_WIDTH）
+        s32 currentWidth = (s32)(progress * PANEL_WIDTH);
+        if (currentWidth <= 0) {
+            svcSleepThread(16666667);
+            continue;
+        }
+        
+        // 计算绘制坐标（从中心开始，向左扩展）
+        s32 drawX = (PANEL_WIDTH - currentWidth) / 2;
+        
+        // 计算裁剪区域（从中心向两边扩展）
+        s32 scissorX = drawX;
+        s32 scissorW = currentWidth;
+        
+        // 每帧清空+绘制
+        m_Renderer.StartFrame();
+        m_Renderer.FillScreen({0, 0, 0, 0});
+        m_Renderer.EnableScissoring(scissorX, 0, scissorW, PANEL_HEIGHT);
+        DrawNotificationContent(0, 0, iconStr, displayText);  // 完整内容在 x=0 处
+        m_Renderer.DisableScissoring();
+        m_Renderer.EndFrame();
+        
+        if (t >= 1.0f) break;
+        svcSleepThread(16666667);  // 16.6ms
+    }
 }
 

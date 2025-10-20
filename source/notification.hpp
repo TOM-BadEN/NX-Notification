@@ -55,10 +55,13 @@ private:
     // 恢复系统输入焦点（模拟触屏点击）
     void RestoreSystemInput();
     
+    // 绘制通知内容（不包含动画）
+    void DrawNotificationContent(s32 drawX, s32 drawY, const char* iconStr, const char* displayText);
+    
     // 动画函数
-    void AnimateFromLeft(s32 targetX, s32 targetY);   // 左边滑入
-    void AnimateFromRight(s32 targetX, s32 targetY);  // 右边滑入
-    void AnimateExpand(s32 targetX, s32 targetY);     // 中间展开（未实现）
+    void AnimateFromLeft(s32 targetX, s32 targetY, const char* iconStr, const char* displayText);   // 左边滑入
+    void AnimateFromRight(s32 targetX, s32 targetY, const char* iconStr, const char* displayText);  // 右边滑入
+    void AnimateExpand(s32 targetX, s32 targetY, const char* iconStr, const char* displayText);     // 中间展开
     
     // 缓动函数
     static float EaseOutCubic(float t);

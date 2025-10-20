@@ -8,6 +8,11 @@ GraphicsRenderer::GraphicsRenderer()
     , m_CurrentFramebuffer(nullptr)
     , m_Width(0)
     , m_Height(0)
+    , m_ScissorEnabled(false)
+    , m_ScissorX(0)
+    , m_ScissorY(0)
+    , m_ScissorW(0)
+    , m_ScissorH(0)
 {
     // 预初始化字体管理器（确保在绘制前字体已加载）
     FontManager::Instance();
@@ -73,6 +78,7 @@ u32 GraphicsRenderer::GetPixelOffset(s32 x, s32 y) {
 // 直接设置像素（不混合）
 void GraphicsRenderer::SetPixel(s32 x, s32 y, Color color) {
     if (x < 0 || y < 0 || x >= (s32)m_Width || y >= (s32)m_Height || m_CurrentFramebuffer == nullptr) return;
+    if (!IsInScissor(x, y)) return;  // 裁剪检查
     u32 offset = GetPixelOffset(x, y);
     ((u16*)m_CurrentFramebuffer)[offset] = ColorToU16(color);
 }
@@ -80,6 +86,7 @@ void GraphicsRenderer::SetPixel(s32 x, s32 y, Color color) {
 // 设置像素（与目标混合）（透明实现）
 void GraphicsRenderer::SetPixelBlend(s32 x, s32 y, Color color) {
     if (x < 0 || y < 0 || x >= (s32)m_Width || y >= (s32)m_Height || m_CurrentFramebuffer == nullptr) return;
+    if (!IsInScissor(x, y)) return;  // 裁剪检查
     u32 offset = GetPixelOffset(x, y);
     Color src = ColorFromU16(((u16*)m_CurrentFramebuffer)[offset]);
     Color dst = color;
@@ -180,6 +187,20 @@ void GraphicsRenderer::FillScreen(Color color) {
             SetPixel(x, y, color);
         }
     }
+}
+
+// 启用裁剪区域
+void GraphicsRenderer::EnableScissoring(s32 x, s32 y, s32 w, s32 h) {
+    m_ScissorEnabled = true;
+    m_ScissorX = x;
+    m_ScissorY = y;
+    m_ScissorW = w;
+    m_ScissorH = h;
+}
+
+// 禁用裁剪区域
+void GraphicsRenderer::DisableScissoring() {
+    m_ScissorEnabled = false;
 }
 
 // UTF-8 解码：将 UTF-8 字符串解析为 Unicode 码点

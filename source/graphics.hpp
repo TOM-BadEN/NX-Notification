@@ -51,6 +51,10 @@ public:
     // 文本测量
     float MeasureTextWidth(const char* text, float fontSize);
     
+    // 裁剪区域（Scissoring）
+    void EnableScissoring(s32 x, s32 y, s32 w, s32 h);
+    void DisableScissoring();
+    
     // 颜色工具（静态，可以独立使用）
     static inline u16 ColorToU16(Color c);
     static inline Color ColorFromU16(u16 raw);
@@ -63,8 +67,19 @@ private:
     u16 m_Width;
     u16 m_Height;
     
+    // 裁剪区域状态
+    bool m_ScissorEnabled;
+    s32 m_ScissorX, m_ScissorY, m_ScissorW, m_ScissorH;
+    
     // 块线性地址计算
     u32 GetPixelOffset(s32 x, s32 y);
+    
+    // 检查坐标是否在裁剪区域内
+    inline bool IsInScissor(s32 x, s32 y) const {
+        if (!m_ScissorEnabled) return true;
+        return x >= m_ScissorX && x < m_ScissorX + m_ScissorW &&
+               y >= m_ScissorY && y < m_ScissorY + m_ScissorH;
+    }
     
     // 颜色混合
     static inline u8 BlendColor(u8 src, u8 dst, u8 alpha);
