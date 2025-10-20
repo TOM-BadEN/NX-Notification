@@ -172,7 +172,14 @@ void GraphicsRenderer::DrawRoundedRectPartial(s32 x, s32 y, s32 w, s32 h, s32 ra
 
 // 填充整个屏幕
 void GraphicsRenderer::FillScreen(Color color) {
-    DrawRect(0, 0, m_Width, m_Height, color);
+    // 使用 SetPixel 逐像素填充（处理块线性布局）
+    if (!m_CurrentFramebuffer) return;
+    
+    for (s32 y = 0; y < (s32)m_Height; y++) {
+        for (s32 x = 0; x < (s32)m_Width; x++) {
+            SetPixel(x, y, color);
+        }
+    }
 }
 
 // UTF-8 解码：将 UTF-8 字符串解析为 Unicode 码点

@@ -5,7 +5,7 @@
 
 // 面板实际显示尺寸（物理像素，屏幕上看到的大小）
 #define PANEL_WIDTH  (400 * SCALE)   // 400 物理像素 = 600 逻辑像素
-#define PANEL_HEIGHT (100 * SCALE)   // 130 物理像素 = 195 逻辑像素
+#define PANEL_HEIGHT (100 * SCALE)   // 100 物理像素 = 150 逻辑像素
 
 // Framebuffer 尺寸（必须满足块线性布局要求：宽度是 32 的倍数）
 #define FB_WIDTH  (((int)PANEL_WIDTH + 31) / 32 * 32)  // 自动向上取整到 32 的倍数
@@ -176,26 +176,23 @@ void NotificationManager::Show(const char* text, NotificationPosition position) 
     // 恢复系统输入焦点
     RestoreSystemInput();
     
-    // 1. 根据位置计算 Layer 屏幕坐标（使用宏定义）
-    s32 layerScreenX;
-    s32 layerScreenY = PANEL_MARGIN_TOP;  // 垂直固定距顶部
+    // 1. 根据位置计算最终 Layer 坐标
+    s32 targetX;
+    s32 targetY = PANEL_MARGIN_TOP;
     
     switch (position) {
         case LEFT:  // 左对齐
-            layerScreenX = PANEL_MARGIN_SIDE;
+            targetX = PANEL_MARGIN_SIDE;
             break;
         case MIDDLE:  // 居中
-            layerScreenX = (SCREEN_WIDTH - PANEL_WIDTH) / 2;
+            targetX = (SCREEN_WIDTH - PANEL_WIDTH) / 2;
             break;
         case RIGHT:  // 右对齐
-            layerScreenX = SCREEN_WIDTH - PANEL_WIDTH - PANEL_MARGIN_SIDE;
+            targetX = SCREEN_WIDTH - PANEL_WIDTH - PANEL_MARGIN_SIDE;
             break;
         default:
-            layerScreenX = (SCREEN_WIDTH - PANEL_WIDTH) / 2;  // 默认居中
+            targetX = (SCREEN_WIDTH - PANEL_WIDTH) / 2;  // 默认居中
     }
-    
-    // 2. 更新 Layer 位置
-    viSetLayerPosition(&m_Layer, layerScreenX, layerScreenY);
     
     // 3. 面板布局（使用宏定义）
     s32 panelX = 0;              // 从 Framebuffer 左边开始
@@ -222,7 +219,7 @@ void NotificationManager::Show(const char* text, NotificationPosition position) 
         while (*displayText == ' ') displayText++;
     }
     
-    // 5. 绘制
+    // 8. 绘制
     m_Renderer.StartFrame();
     
     // 背景（圆角矩形）
@@ -252,16 +249,93 @@ void NotificationManager::Show(const char* text, NotificationPosition position) 
     m_Renderer.DrawText(displayText, textX, panelY, textW, panelH, PANEL_FONT_SIZE, {5, 5, 5, 15}, GraphicsRenderer::TextAlign::LEFT); 
     
     m_Renderer.EndFrame();
+    
+    // 2. 执行动画（根据位置选择不同动画）
+    switch (position) {
+        case LEFT:
+            AnimateFromLeft(targetX, targetY);
+            break;
+        case RIGHT:
+            AnimateFromRight(targetX, targetY);
+            break;
+        case MIDDLE:
+            AnimateExpand(targetX, targetY);  // 暂时只是设置位置
+            break;
+        default:
+            viSetLayerPosition(&m_Layer, targetX, targetY);
+            break;
+    }
+    
+    m_IsVisible = true;
 }
 
 // 隐藏通知弹窗
 void NotificationManager::Hide() {
     if (!m_Initialized) return;
     
-    // 绘制全透明帧，清空显示
-    m_Renderer.StartFrame();
-    m_Renderer.FillScreen({0, 0, 0, 0});
-    m_Renderer.EndFrame();
+    // 清空双缓冲（确保彻底清除）
+    for (int i = 0; i < 2; i++) {
+        m_Renderer.StartFrame();
+        m_Renderer.FillScreen({0, 0, 0, 0});
+        m_Renderer.EndFrame();
+    }
     
     m_IsVisible = false;
 }
+
+// ==================== 动画函数 ====================
+
+// 缓动函数：快进慢出（EaseOutCubic）
+float NotificationManager::EaseOutCubic(float t) {
+    float f = t - 1.0f;
+    return f * f * f + 1.0f;
+}
+// 左边滑入动画
+void NotificationManager::AnimateFromLeft(s32 targetX, s32 targetY) {
+    const int ANIMATION_FRAMES = 120;
+    const u64 FRAME_TIME = 16666667;  // 16.6ms (60fps)
+    
+    s32 startX = -PANEL_WIDTH;  // 从左边屏幕外开始
+    
+    for (int i = 0; i <= ANIMATION_FRAMES; i++) {
+        float t = (float)i / ANIMATION_FRAMES;
+        float progress = EaseOutCubic(t);
+        
+        s32 currentX = startX + (s32)((targetX - startX) * progress);
+        
+        viSetLayerPosition(&m_Layer, currentX, targetY);
+        svcSleepThread(FRAME_TIME);
+    }
+    
+    // 确保最终位置准确
+    viSetLayerPosition(&m_Layer, targetX, targetY);
+}
+
+// 右边滑入动画
+void NotificationManager::AnimateFromRight(s32 targetX, s32 targetY) {
+    const int ANIMATION_FRAMES = 15;
+    const u64 FRAME_TIME = 16666667;  // 16.6ms (60fps)
+    
+    s32 startX = SCREEN_WIDTH;  // 从右边屏幕外开始
+    
+    for (int i = 0; i <= ANIMATION_FRAMES; i++) {
+        float t = (float)i / ANIMATION_FRAMES;
+        float progress = EaseOutCubic(t);
+        
+        s32 currentX = startX + (s32)((targetX - startX) * progress);
+        
+        viSetLayerPosition(&m_Layer, currentX, targetY);
+        svcSleepThread(FRAME_TIME);
+    }
+    
+    // 确保最终位置准确
+    viSetLayerPosition(&m_Layer, targetX, targetY);
+}
+
+// 中间展开动画（未实现，占位）
+void NotificationManager::AnimateExpand(s32 targetX, s32 targetY) {
+    // TODO: 实现展开动画
+    // 暂时直接设置位置，不做动画
+    viSetLayerPosition(&m_Layer, targetX, targetY);
+}
+

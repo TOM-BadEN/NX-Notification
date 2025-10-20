@@ -13,11 +13,25 @@ App::~App() {
 
 void App::Loop() {
     // 测试左对齐位置
-    m_NotifMgr.Show("\uE137左对齐测试HAH", LEFT);
-    svcSleepThread(5000000000ULL);  // 2 秒
+    // m_NotifMgr.Show("\uE140居中测试HAH", MIDDLE);
+    // svcSleepThread(5000000000ULL);  // 2 秒
     
     // 测试居中位置
-    m_NotifMgr.Show("\uE140居中测试HAH", MIDDLE);
+    m_NotifMgr.Show("\uE137左对齐测试HAH", LEFT);
+    svcSleepThread(2000000000ULL);  // 2 秒
+    m_NotifMgr.Hide();
+    svcSleepThread(5000000000ULL);  // 2 秒
+    m_NotifMgr.Show("\uE137左对齐测试HAH", LEFT);
+    svcSleepThread(2000000000ULL);  // 2 秒
+    m_NotifMgr.Hide();
+    svcSleepThread(5000000000ULL);  // 2 秒
+    m_NotifMgr.Show("\uE137左对齐测试HAH", LEFT);
+    svcSleepThread(5000000000ULL);  // 2 秒
+    m_NotifMgr.Hide();
+    svcSleepThread(5000000000ULL);  // 2 秒
+    m_NotifMgr.Show("\uE137左对齐测试HAH", LEFT);
+    svcSleepThread(5000000000ULL);  // 2 秒
+    m_NotifMgr.Hide();
     svcSleepThread(5000000000ULL);  // 2 秒
     
     // 测试右对齐位置
