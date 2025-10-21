@@ -3,12 +3,16 @@
 #include <cerrno>
 #include <cstdio>
 
-bool SimpleFs::DirectoryExists(const std::string& dir_path) {
-    if (dir_path.empty()) {
+// 定义静态成员
+char SimpleFs::s_PathBuffer[256];     // 路径缓冲区
+char SimpleFs::s_ContentBuffer[256];  // 文件内容缓冲区
+
+bool SimpleFs::DirectoryExists(const char* dir_path) {
+    if (!dir_path || dir_path[0] == '\0') {
         return false;
     }
     
-    DIR* dir = opendir(dir_path.c_str());
+    DIR* dir = opendir(dir_path);
     if (dir) {
         closedir(dir);
         return true;
@@ -17,8 +21,8 @@ bool SimpleFs::DirectoryExists(const std::string& dir_path) {
     return false;
 }
 
-bool SimpleFs::CreateDirectory(const std::string& dir_path) {
-    if (dir_path.empty()) {
+bool SimpleFs::CreateDirectory(const char* dir_path) {
+    if (!dir_path || dir_path[0] == '\0') {
         return false;
     }
     
@@ -28,7 +32,7 @@ bool SimpleFs::CreateDirectory(const std::string& dir_path) {
     }
     
     // 创建目录，权限 0755 (rwxr-xr-x)
-    if (mkdir(dir_path.c_str(), 0755) == 0) {
+    if (mkdir(dir_path, 0755) == 0) {
         return true;
     }
     
@@ -40,12 +44,12 @@ bool SimpleFs::CreateDirectory(const std::string& dir_path) {
     return false;
 }
 
-bool SimpleFs::ClearDirectory(const std::string& dir_path) {
-    if (dir_path.empty()) {
+bool SimpleFs::ClearDirectory(const char* dir_path) {
+    if (!dir_path || dir_path[0] == '\0') {
         return false;
     }
     
-    DIR* dir = opendir(dir_path.c_str());
+    DIR* dir = opendir(dir_path);
     if (!dir) {
         return false;
     }
@@ -63,13 +67,10 @@ bool SimpleFs::ClearDirectory(const std::string& dir_path) {
         
         // 只删除普通文件，不删除子目录
         if (entry->d_type == DT_REG) {
-            std::string file_path = dir_path;
-            if (file_path.back() != '/') {
-                file_path += '/';
-            }
-            file_path += entry->d_name;
+            char file_path[1024];
+            snprintf(file_path, sizeof(file_path), "%s/%s", dir_path, entry->d_name);
             
-            if (remove(file_path.c_str()) != 0) {
+            if (remove(file_path) != 0) {
                 success = false;
             }
         }
@@ -79,14 +80,14 @@ bool SimpleFs::ClearDirectory(const std::string& dir_path) {
     return success;
 }
 
-std::string SimpleFs::GetFirstIniFile(const std::string& dir_path) {
-    if (dir_path.empty()) {
-        return "";
+const char* SimpleFs::GetFirstIniFile(const char* dir_path) {
+    if (!dir_path || dir_path[0] == '\0') {
+        return nullptr;
     }
     
-    DIR* dir = opendir(dir_path.c_str());
+    DIR* dir = opendir(dir_path);
     if (!dir) {
-        return "";
+        return nullptr;
     }
     
     struct dirent* entry;
@@ -108,37 +109,33 @@ std::string SimpleFs::GetFirstIniFile(const std::string& dir_path) {
             (name[len-2] == 'n' || name[len-2] == 'N') &&
             (name[len-1] == 'i' || name[len-1] == 'I')) {
             
-            std::string file_path = dir_path;
-            if (file_path.back() != '/') {
-                file_path += '/';
-            }
-            file_path += name;
-            
+            // 拼接到路径缓冲区
+            snprintf(s_PathBuffer, sizeof(s_PathBuffer), "%s/%s", dir_path, name);
             closedir(dir);
-            return file_path;  // 找到第一个就返回
+            return s_PathBuffer;  // 返回路径缓冲区指针
         }
     }
     
     closedir(dir);
-    return "";  // 没找到
+    return nullptr;  // 没找到
 }
 
-bool SimpleFs::DeleteFile(const std::string& file_path) {
-    if (file_path.empty()) {
+bool SimpleFs::DeleteFile(const char* file_path) {
+    if (!file_path || file_path[0] == '\0') {
         return false;
     }
     
-    return remove(file_path.c_str()) == 0;
+    return remove(file_path) == 0;
 }
 
-std::string SimpleFs::ReadFileContent(const std::string& file_path) {
-    if (file_path.empty()) {
-        return "";
+const char* SimpleFs::ReadFileContent(const char* file_path) {
+    if (!file_path || file_path[0] == '\0') {
+        return nullptr;
     }
     
-    FILE* file = fopen(file_path.c_str(), "rb");
+    FILE* file = fopen(file_path, "rb");
     if (!file) {
-        return "";
+        return nullptr;
     }
     
     // 获取文件大小
@@ -146,22 +143,21 @@ std::string SimpleFs::ReadFileContent(const std::string& file_path) {
     long file_size = ftell(file);
     fseek(file, 0, SEEK_SET);
     
-    if (file_size <= 0 || file_size > 4096) {
+    // 检查大小（文件太大或为空）
+    if (file_size <= 0 || file_size >= (long)sizeof(s_ContentBuffer)) {
         fclose(file);
-        return "";
+        return nullptr;
     }
     
-    // 一次性读取全部内容
-    std::string content;
-    content.resize(file_size);
-    
-    size_t read_size = fread(&content[0], 1, file_size, file);
+    // 读取到内容缓冲区
+    size_t read_size = fread(s_ContentBuffer, 1, file_size, file);
+    s_ContentBuffer[read_size] = '\0';  // 添加 null terminator
     fclose(file);
     
     if (read_size != (size_t)file_size) {
-        return "";
+        return nullptr;
     }
     
-    return content;
+    return s_ContentBuffer;  // 返回内容缓冲区指针
 }
 

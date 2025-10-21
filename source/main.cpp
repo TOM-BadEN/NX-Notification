@@ -9,14 +9,16 @@ NvServiceType __attribute__((weak)) __nx_nv_service_type = NvServiceType_Applica
 
 extern "C" {
 
-// 内部堆的大小（根据需要调整） 4MB
-#define INNER_HEAP_SIZE 0x400000
+// 内部堆的大小（根据需要调整） 
+#define INNER_HEAP_SIZE 0x200000         // 1MB
+// #define INNER_HEAP_SIZE 0x40000             // 256KB
 
 // 系统模块不应使用applet相关功能
 u32 __nx_applet_type = AppletType_None;
 
-// 设置用于 NVIDIA 显卡操作的共享内存大小（2MB）
-u32 __nx_nv_transfermem_size = 0x200000;
+// 设置用于 NVIDIA 显卡操作的共享内存大小
+// u32 __nx_nv_transfermem_size = 0x200000;               // 2MB
+u32 __nx_nv_transfermem_size = 0x50000;                   // 320KB
 
 // 系统模块通常只需要使用一个文件系统会话
 u32 __nx_fs_num_sessions = 1;

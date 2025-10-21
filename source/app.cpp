@@ -1,6 +1,5 @@
 #include "app.hpp"
-#include <sstream>
-#include <cstdlib>
+#include <cstring>
 #include "SimpleFs.hpp"
 
 
@@ -32,7 +31,7 @@ void App::Loop() {
     u64 show_start_time = 0;                      // 当前通知开始显示的时间
     u64 hide_time = 0;                            // 应该隐藏的时间点
     
-    const u64 timeout_ns = 20000000000ULL;        // 20 秒超时（纳秒）
+    const u64 timeout_ns = 2000000000ULL;         // 2 秒超时（纳秒）
     const u64 min_display_ns = 1000000000ULL;     // 最小显示时长 1 秒（纳秒）
     const u64 sleep_ns = 200000000ULL;            // 每次循环休眠 200ms
     
@@ -41,10 +40,10 @@ void App::Loop() {
         u64 now = armGetSystemTick();
         
         // 扫描第一个 INI 文件
-        std::string file = SimpleFs::GetFirstIniFile(NOTIFICATION_PATH);
+        const char* file = SimpleFs::GetFirstIniFile(NOTIFICATION_PATH);
         
         // 如果有文件
-        if (!file.empty()) {
+        if (file) {
             // 重置超时计时器
             last_activity_time = now;  
             
@@ -62,7 +61,7 @@ void App::Loop() {
             }
             
             // 读取并解析文件
-            std::string content = SimpleFs::ReadFileContent(file);
+            const char* content = SimpleFs::ReadFileContent(file);
             // 解析出来通知所需的结构体
             NotificationConfig config = ParseIni(content);
             
@@ -70,19 +69,19 @@ void App::Loop() {
             SimpleFs::DeleteFile(file);
             
             // 检查解析出来的通知配置项，无效则跳过
-            if (config.text.empty()) {
+            if (config.text[0] == '\0') {
                 svcSleepThread(sleep_ns);
                 continue;
             }
             
             // 显示新通知
-            m_NotifMgr.Show(config.text.c_str(), config.position, config.type);
+            m_NotifMgr.Show(config.text, config.position, config.type);
             // 记录通知开始显示的时间
             show_start_time = now;
             
             // 检查是否还有其他文件（判断显示时长）（如果有，则显示时长为1秒，没有就按配置项中的时长）
-            std::string next_file = SimpleFs::GetFirstIniFile(NOTIFICATION_PATH);
-            u64 display_duration = next_file.empty() ? config.duration : min_display_ns;
+            const char* next_file = SimpleFs::GetFirstIniFile(NOTIFICATION_PATH);
+            u64 display_duration = next_file ? min_display_ns : config.duration;
             
             // 计算删除这个通知的时间点
             hide_time = show_start_time + armNsToTicks(display_duration);
@@ -97,6 +96,7 @@ void App::Loop() {
             if (now >= hide_time) {
                 m_NotifMgr.Hide();
                 state = IDLE;
+                last_activity_time = now;  // 更新超时计时起点（从Hide后开始计时）
             }
             svcSleepThread(sleep_ns);
             continue;
@@ -115,64 +115,95 @@ void App::Loop() {
 
 
 
-NotificationConfig App::ParseIni(const std::string& content) {
+NotificationConfig App::ParseIni(const char* content) {
+    
     NotificationConfig config;
+    config.text[0] = '\0';
     config.duration = 0;
+    config.type = INFO;      
+    config.position = RIGHT;
+
+    if (!content) return config;
+    const char* p = content;
     
-    bool has_text = false;
-    bool has_type = false;
-    bool has_position = false;
-    bool has_duration = false;
-    
-    std::istringstream stream(content);
-    std::string line;
-    
-    while (std::getline(stream, line)) {
-        // 跳过空行
-        if (line.empty()) continue;
+    while (*p) {
+        // 跳过空白字符
+        while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+        if (*p == '\0') break;
+        
+        const char* line_start = p;
+        const char* equal_pos = nullptr;
         
         // 查找 '=' 分隔符
-        size_t pos = line.find('=');
-        if (pos == std::string::npos) continue;
-        
-        // 提取 key 和 value
-        std::string key = line.substr(0, pos);
-        std::string value = line.substr(pos + 1);
-        
-        // 去除 value 末尾的 \r \n 空格
-        while (!value.empty() && (value.back() == '\r' || value.back() == '\n' || value.back() == ' ')) {
-            value.pop_back();
+        while (*p && *p != '\n') {
+            if (*p == '=' && !equal_pos) equal_pos = p;
+            p++;
         }
         
-        // 匹配对应字段
-        if (key == "text") {
-            config.text = value;
-            has_text = true;
-        } 
-        else if (key == "duration") {
-            int seconds = atoi(value.c_str());
-            // 限制范围：1秒 ~ 10秒
+        // 没有找到 '='，跳过这行
+        if (!equal_pos) {
+            if (*p == '\n') p++;
+            continue;
+        }
+        
+        // 提取 key 和 value 的范围
+        const char* key_start = line_start;
+        const char* key_end = equal_pos;
+        const char* value_start = equal_pos + 1;
+        const char* value_end = p;
+        
+        // 去除 key 两端的空格和制表符
+        while (key_start < key_end && (*key_start == ' ' || *key_start == '\t'))
+            key_start++;
+        while (key_end > key_start && (*(key_end-1) == ' ' || *(key_end-1) == '\t'))
+            key_end--;
+        
+        // 去除 value 两端的空格、制表符和 \r
+        while (value_start < value_end && (*value_start == ' ' || *value_start == '\t'))
+            value_start++;
+        while (value_end > value_start && (*(value_end-1) == ' ' || *(value_end-1) == '\t' || *(value_end-1) == '\r'))
+            value_end--;
+        
+        int key_len = key_end - key_start;
+        int value_len = value_end - value_start;
+        
+        // 匹配 "text"
+        if (key_len == 4 && strncmp(key_start, "text", 4) == 0) {
+            if (value_len <= 0) continue;
+            int copy_len = (value_len < 31) ? value_len : 31;
+            strncpy(config.text, value_start, copy_len);
+            config.text[copy_len] = '\0';
+        }
+        // 匹配 "duration"
+        else if (key_len == 8 && strncmp(key_start, "duration", 8) == 0) {
+            int seconds = 0;
+            for (const char* d = value_start; d < value_end && *d >= '0' && *d <= '9'; d++)
+                seconds = seconds * 10 + (*d - '0');
+            
             if (seconds < 1) seconds = 2;
             else if (seconds > 10) seconds = 10;
-            // 转换为纳秒
             config.duration = (u64)seconds * 1000000000ULL;
-            has_duration = true;
-        } 
-        else if (key == "position") {
-            if (value == "LEFT")        { config.position = LEFT;   has_position = true; }
-            else if (value == "MIDDLE") { config.position = MIDDLE; has_position = true; }
-            else if (value == "RIGHT")  { config.position = RIGHT;  has_position = true; }
-        } 
-        else if (key == "type") {
-            if (value == "INFO")  { config.type = INFO;  has_type = true; }
-            else if (value == "ERROR") { config.type = ERROR; has_type = true; }
         }
+        // 匹配 "position"
+        else if (key_len == 8 && strncmp(key_start, "position", 8) == 0) {
+            if (value_len == 4 && strncmp(value_start, "LEFT", 4) == 0)
+                config.position = LEFT;
+            else if (value_len == 6 && strncmp(value_start, "MIDDLE", 6) == 0)
+                config.position = MIDDLE;
+            else if (value_len == 5 && strncmp(value_start, "RIGHT", 5) == 0)
+                config.position = RIGHT;
+        }
+        // 匹配 "type"
+        else if (key_len == 4 && strncmp(key_start, "type", 4) == 0) {
+            if (value_len == 4 && strncmp(value_start, "INFO", 4) == 0)
+                config.type = INFO;
+            else if (value_len == 5 && strncmp(value_start, "ERROR", 5) == 0)
+                config.type = ERROR;
+        }
+        
+        if (*p == '\n') p++;
     }
     
-    // 如果任何一项缺失，清空 text（标记无效）
-    if (!has_text || !has_type || !has_position || !has_duration) {
-        config.text = "";
-    }
     
     return config;
 }
