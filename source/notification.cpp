@@ -1,4 +1,5 @@
 #include "notification.hpp"
+#include <cstring>
 
 // 缩放比例（逻辑分辨率 / 物理分辨率 = 1920 / 1280 = 1.5）
 #define SCALE 1.5f
@@ -203,7 +204,7 @@ void NotificationManager::DrawNotificationContent(s32 drawX, s32 drawY, const ch
 }
 
 // 显示通知弹窗
-void NotificationManager::Show(const char* text, NotificationPosition position) {
+void NotificationManager::Show(const char* text, NotificationPosition position, NotificationType type) {
     if (!m_Initialized) return;
     // 代表弹窗显示中
     m_IsVisible = true;
@@ -211,7 +212,10 @@ void NotificationManager::Show(const char* text, NotificationPosition position) 
     RestoreSystemInput();
     
     // 提前解析图标和文本
-    char iconStr[4] = "\uE137";  // 默认图标
+    char iconStr[4];
+    if (type == INFO) strcpy(iconStr, "\uE137");       // 信息图标
+    else if (type == ERROR) strcpy(iconStr, "\uE140"); // 错误图标
+     
     const char* displayText = text;
     
     if (text && (u8)text[0] == 0xEE && ((u8)text[1] & 0xF0) == 0x80) {

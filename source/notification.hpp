@@ -10,6 +10,12 @@ enum NotificationPosition {
     RIGHT = 2    // 右对齐
 };
 
+// 通知类型枚举
+enum NotificationType {
+    INFO = 0,    // 信息
+    ERROR = 1    // 错误
+};
+
 // 通知管理器：负责通知弹窗的显示和管理
 class NotificationManager {
 public:
@@ -21,7 +27,7 @@ public:
     
     // 显示通知弹窗
     // position: LEFT=左对齐, MIDDLE=居中, RIGHT=右对齐
-    void Show(const char* text, NotificationPosition position = RIGHT);
+    void Show(const char* text, NotificationPosition position = RIGHT, NotificationType type = INFO);
     
     // 隐藏通知弹窗
     void Hide();

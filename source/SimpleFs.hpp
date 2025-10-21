@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
 class SimpleFs {
 public:
@@ -27,18 +26,18 @@ public:
     static bool ClearDirectory(const std::string& dir_path);
     
     /**
-     * @brief 获取指定目录下所有 .ini 文件的完整路径
+     * @brief 获取指定目录下第一个 .ini 文件的完整路径
      * @param dir_path 目录路径
-     * @return .ini 文件路径列表（按文件名排序）
+     * @return .ini 文件路径，如果没有则返回空字符串
      */
-    static std::vector<std::string> ListIniFiles(const std::string& dir_path);
+    static std::string GetFirstIniFile(const std::string& dir_path);
     
     /**
-     * @brief 批量删除文件
-     * @param file_paths 文件路径列表
-     * @return true 全部删除成功, false 至少有一个失败
+     * @brief 删除单个文件
+     * @param file_path 文件路径
+     * @return true 删除成功, false 删除失败
      */
-    static bool DeleteFiles(const std::vector<std::string>& file_paths);
+    static bool DeleteFile(const std::string& file_path);
     
     /**
      * @brief 读取文件全部内容到内存

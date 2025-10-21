@@ -79,16 +79,14 @@ bool SimpleFs::ClearDirectory(const std::string& dir_path) {
     return success;
 }
 
-std::vector<std::string> SimpleFs::ListIniFiles(const std::string& dir_path) {
-    std::vector<std::string> result;
-    
+std::string SimpleFs::GetFirstIniFile(const std::string& dir_path) {
     if (dir_path.empty()) {
-        return result;
+        return "";
     }
     
     DIR* dir = opendir(dir_path.c_str());
     if (!dir) {
-        return result;
+        return "";
     }
     
     struct dirent* entry;
@@ -116,28 +114,21 @@ std::vector<std::string> SimpleFs::ListIniFiles(const std::string& dir_path) {
             }
             file_path += name;
             
-            result.push_back(file_path);
+            closedir(dir);
+            return file_path;  // 找到第一个就返回
         }
     }
     
     closedir(dir);
-    return result;
+    return "";  // 没找到
 }
 
-bool SimpleFs::DeleteFiles(const std::vector<std::string>& file_paths) {
-    if (file_paths.empty()) {
-        return true;
+bool SimpleFs::DeleteFile(const std::string& file_path) {
+    if (file_path.empty()) {
+        return false;
     }
     
-    bool success = true;
-    
-    for (const std::string& path : file_paths) {
-        if (remove(path.c_str()) != 0) {
-            success = false;
-        }
-    }
-    
-    return success;
+    return remove(file_path.c_str()) == 0;
 }
 
 std::string SimpleFs::ReadFileContent(const std::string& file_path) {
