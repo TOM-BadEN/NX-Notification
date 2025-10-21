@@ -1,6 +1,7 @@
 #include "app.hpp"
 
 App::App() {
+
     // 初始化通知管理器
     Result rc = m_NotifMgr.Init();
     if (R_FAILED(rc)) {
@@ -12,9 +13,11 @@ App::~App() {
 }
 
 void App::Loop() {
+
     
     
-    // 测试居中位置
+    
+    // // 测试居中位置
     m_NotifMgr.Show("\uE137左对齐测试HAH", LEFT);
     svcSleepThread(2000000000ULL);  // 2 秒
     m_NotifMgr.Hide();
