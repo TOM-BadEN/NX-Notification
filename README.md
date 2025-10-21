@@ -1,3 +1,6 @@
+
+![演示](./image/demo.gif)
+
 # NX-Notification
 
 Nintendo Switch 通知弹窗系统模块及 C 库
@@ -32,7 +35,7 @@ Nintendo Switch 通知弹窗系统模块及 C 库
 
 ## 使用方法
 
-1. 编译好系统模块后，将其与你的插件一同发方
+1. 编译好系统模块后，将其与你的插件一同发放
 2. 你的插件项目中引入[libnotification](./libnotification/)后，调用创建通知弹窗即可
 3. libnotification 详细文档：[README](./libnotification/README.md)
 
