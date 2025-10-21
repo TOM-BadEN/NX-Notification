@@ -50,7 +50,7 @@ void __libnx_free(void* p) {
 */
 
 // 堆的大小
-#define INNER_HEAP_SIZE 0xCD000          // 820 KB
+#define INNER_HEAP_SIZE 0x6B000          // 428 KB
 
 // 系统模块不应使用applet相关功能
 u32 __nx_applet_type = AppletType_None;

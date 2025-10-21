@@ -1,26 +1,30 @@
 #include "notification.hpp"
 #include <cstring>
 
-// 缩放比例（逻辑分辨率 / 物理分辨率 = 1920 / 1280 = 1.5）
-#define SCALE 1.5f
+// 渲染和显示分离（利用硬件拉伸节省内存）
+#define SCALE 1.0f  // 渲染不缩放
 
-// 面板实际显示尺寸（物理像素，屏幕上看到的大小）
-#define PANEL_WIDTH  (400 * SCALE)   // 400 物理像素 = 600 逻辑像素
-#define PANEL_HEIGHT (100 * SCALE)   // 100 物理像素 = 150 逻辑像素
+// 面板渲染尺寸（Framebuffer 实际大小）
+#define PANEL_WIDTH  416                 // 对齐到 32 的倍数
+#define PANEL_HEIGHT 100
 
-// Framebuffer 尺寸（必须满足块线性布局要求：宽度是 32 的倍数）
-#define FB_WIDTH  (((int)PANEL_WIDTH + 31) / 32 * 32)  // 自动向上取整到 32 的倍数
-#define FB_HEIGHT ((int)PANEL_HEIGHT)
+// 面板显示尺寸（Layer 大小，拉伸后）
+#define LAYER_DISPLAY_WIDTH  624         // 416 × 1.5
+#define LAYER_DISPLAY_HEIGHT 150         // 100 × 1.5
 
-// 面板位置配置（物理像素）
-#define PANEL_MARGIN_TOP  (50 * SCALE)   // 50 物理像素 = 75 逻辑像素
-#define PANEL_MARGIN_SIDE (50 * SCALE)   // 50 物理像素 = 75 逻辑像素
+// Framebuffer 尺寸（已经对齐到 32）
+#define FB_WIDTH  PANEL_WIDTH            // 416
+#define FB_HEIGHT PANEL_HEIGHT           // 100
 
-// 屏幕尺寸常量（Layer 逻辑分辨率）
-#define SCREEN_WIDTH  1920          // 物理分辨率宽度（物理 1280）
-#define SCREEN_HEIGHT 1080          // 物理分辨率高度（物理 720）
+// 面板位置配置（保持视觉效果）
+#define PANEL_MARGIN_TOP  75
+#define PANEL_MARGIN_SIDE 75
 
-#define PANEL_FONT_SIZE  (28 * SCALE)   // 字体大小（逻辑像素）
+// 屏幕尺寸常量（Layer 逻辑分辨率，保持不变）
+#define SCREEN_WIDTH  1920
+#define SCREEN_HEIGHT 1080
+
+#define PANEL_FONT_SIZE  28              // 字体大小（渲染尺寸）
 
 // libnx 内部全局变量：用于关联 ManagedLayer 和普通 Layer
 extern "C" u64 __nx_vi_layer_id;
@@ -69,9 +73,9 @@ Result NotificationManager::Init() {
     bool windowCreated = false;     // 窗口是否已创建
     
     // 1. 设置图层尺寸和位置（使用宏定义）
-    m_LayerWidth = FB_WIDTH;                         // 实际显示宽度
-    m_LayerHeight = FB_HEIGHT;                       // 实际显示高度
-    m_LayerPosX = (SCREEN_WIDTH - FB_WIDTH) / 2;    // 初始居中位置
+    m_LayerWidth = LAYER_DISPLAY_WIDTH;              // 实际显示宽度
+    m_LayerHeight = LAYER_DISPLAY_HEIGHT;            // 实际显示高度
+    m_LayerPosX = (SCREEN_WIDTH - LAYER_DISPLAY_WIDTH) / 2;    // 初始居中位置
     m_LayerPosY = PANEL_MARGIN_TOP;                     // 距屏幕顶部距离
     
     // 2. 初始化 VI 服务
@@ -117,8 +121,8 @@ Result NotificationManager::Init() {
     rc = ViAddToLayerStack(&m_Layer, ViLayerStack_Screenshot);
     if (R_FAILED(rc)) goto cleanup;
     
-    // 12. 设置图层尺寸
-    rc = viSetLayerSize(&m_Layer, m_LayerWidth, m_LayerHeight);
+    // 12. 设置图层尺寸（显示尺寸，Framebuffer 会自动拉伸）
+    rc = viSetLayerSize(&m_Layer, LAYER_DISPLAY_WIDTH, LAYER_DISPLAY_HEIGHT);
     if (R_FAILED(rc)) goto cleanup;
     
     // 13. 设置图层位置
@@ -196,7 +200,7 @@ void NotificationManager::DrawNotificationContent(s32 drawX, s32 drawY, const ch
     m_Renderer.DrawText(iconStr, iconX, drawY, iconW, panelH, iconSize, {4, 4, 4, 15});
     
     // 文本
-    s32 textX = iconX + iconW + (s32)(3 * SCALE);
+    s32 textX = iconX + iconW + (s32)(3 * SCALE) + (s32)(3 * SCALE);
     s32 textW = panelW - (textX - drawX) - (s32)(15 * SCALE);
     m_Renderer.DrawText(displayText, textX, drawY, textW, panelH, PANEL_FONT_SIZE, {5, 5, 5, 15}, GraphicsRenderer::TextAlign::LEFT);
 }
@@ -234,17 +238,17 @@ void NotificationManager::Show(const char* text, NotificationPosition position, 
             break;
         }
         case RIGHT: {
-            s32 targetX = SCREEN_WIDTH - PANEL_WIDTH - PANEL_MARGIN_SIDE;
+            s32 targetX = SCREEN_WIDTH - LAYER_DISPLAY_WIDTH - PANEL_MARGIN_SIDE;
             AnimateFromRight(targetX, targetY, iconStr, displayText);
             break;
         }
         case MIDDLE: {
-            s32 targetX = (SCREEN_WIDTH - PANEL_WIDTH) / 2;
+            s32 targetX = (SCREEN_WIDTH - LAYER_DISPLAY_WIDTH) / 2;
             AnimateExpand(targetX, targetY, iconStr, displayText);
             break;
         }
         default: {
-            s32 targetX = (SCREEN_WIDTH - PANEL_WIDTH) / 2;
+            s32 targetX = (SCREEN_WIDTH - LAYER_DISPLAY_WIDTH) / 2;
             viSetLayerPosition(&m_Layer, targetX, targetY);
             break;
         }
