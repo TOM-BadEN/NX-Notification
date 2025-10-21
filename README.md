@@ -57,3 +57,7 @@ NX-Notification/
 └── README.md                  # 本文件
 ```
 
+# 示例项目
+
+[按键连发](https://github.com/TOM-BadEN/NX-Notification/tree/main/sys-Notification) AutoKeyLoop
+[完整示例](https://github.com/TOM-BadEN/NX-Notification/tree/main/libnotification/example/memoryTestTool) 一个内存小工具
