@@ -51,14 +51,13 @@ void __libnx_free(void* p) {
 */
 
 // 堆的大小
-#define INNER_HEAP_SIZE 0x113000          // 1.1 MB
+#define INNER_HEAP_SIZE 0xE1000          // 0.9 MB
 
 // 系统模块不应使用applet相关功能
 u32 __nx_applet_type = AppletType_None;
 
 // 设置用于 NVIDIA 显卡操作的共享内存大小
-// (实际测试4k也可以，太底层了，我看不懂，反正4k可以就不管了)
-u32 __nx_nv_transfermem_size = 0x1000;                   // 4 KB
+u32 __nx_nv_transfermem_size = 0x15000;                   // 86 KB
 
 // 系统模块通常只需要使用一个文件系统会话
 u32 __nx_fs_num_sessions = 1;
@@ -85,9 +84,9 @@ void __appInit(void) {
 
 void __appExit(void) {
     hiddbgExit();
-    setExit();          
-    plExit();           
+    setExit();    
     fsdevUnmountAll();  
+    plExit();  
     fsExit();           
     smExit();           
 }

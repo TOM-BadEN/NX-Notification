@@ -39,7 +39,6 @@ NotificationManager::NotificationManager()
     : m_FramebufferWidth(FB_WIDTH)    // 使用宏定义（自动对齐到 32 的倍数）
     , m_FramebufferHeight(FB_HEIGHT)  // 使用宏定义
     , m_Initialized(false)
-    , m_IsVisible(false)
 {
 }
 
@@ -143,7 +142,6 @@ Result NotificationManager::Init() {
     
     // 17. 初始化完成
     m_Initialized = true;
-    m_IsVisible = true;
     return 0;
 
 cleanup:
@@ -206,8 +204,7 @@ void NotificationManager::DrawNotificationContent(s32 drawX, s32 drawY, const ch
 // 显示通知弹窗
 void NotificationManager::Show(const char* text, NotificationPosition position, NotificationType type) {
     if (!m_Initialized) return;
-    // 代表弹窗显示中
-    m_IsVisible = true;
+
     // 恢复系统输入焦点
     RestoreSystemInput();
     
@@ -267,7 +264,6 @@ void NotificationManager::Hide() {
         m_Renderer.EndFrame();
     }
     
-    m_IsVisible = false;
 }
 
 

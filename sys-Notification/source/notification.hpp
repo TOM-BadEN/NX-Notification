@@ -53,7 +53,6 @@ private:
     
     // 状态标志
     bool m_Initialized;               // 是否已初始化
-    bool m_IsVisible;                 // 是否可见
     
     // 将图层添加到显示栈
     static Result ViAddToLayerStack(ViLayer* layer, ViLayerStack stack);
