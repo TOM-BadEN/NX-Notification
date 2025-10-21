@@ -31,7 +31,7 @@ void App::Loop() {
     u64 show_start_time = 0;                      // 当前通知开始显示的时间
     u64 hide_time = 0;                            // 应该隐藏的时间点
     
-    const u64 timeout_ns = 2000000000ULL;         // 2 秒超时（纳秒）
+    const u64 timeout_ns = 1000000000ULL;         // 1 秒超时（纳秒）
     const u64 min_display_ns = 1000000000ULL;     // 最小显示时长 1 秒（纳秒）
     const u64 sleep_ns = 200000000ULL;            // 每次循环休眠 200ms
     
