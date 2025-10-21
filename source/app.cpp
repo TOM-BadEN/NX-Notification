@@ -4,7 +4,7 @@
 #include "SimpleFs.hpp"
 
 
-#define NOTIFICATION_PATH "/config/notification"
+#define NOTIFICATION_PATH "/config/sys-Notification"
 
 App::App() {
 
