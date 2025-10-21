@@ -109,8 +109,12 @@ const char* SimpleFs::GetFirstIniFile(const char* dir_path) {
             (name[len-2] == 'n' || name[len-2] == 'N') &&
             (name[len-1] == 'i' || name[len-1] == 'I')) {
             
+            // 这句话忽略编译器警告
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wformat-truncation"
             // 拼接到路径缓冲区
             snprintf(s_PathBuffer, sizeof(s_PathBuffer), "%s/%s", dir_path, name);
+            #pragma GCC diagnostic pop
             closedir(dir);
             return s_PathBuffer;  // 返回路径缓冲区指针
         }

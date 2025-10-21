@@ -1,4 +1,5 @@
 #include <switch.h>
+#include <stdlib.h>
 #include "app.hpp"
 
 // 定义一个错误处理宏，如果结果失败，则抛出错误
@@ -9,16 +10,55 @@ NvServiceType __attribute__((weak)) __nx_nv_service_type = NvServiceType_Applica
 
 extern "C" {
 
-// 内部堆的大小（根据需要调整） 
-#define INNER_HEAP_SIZE 0x200000         // 1MB
-// #define INNER_HEAP_SIZE 0x40000             // 256KB
+/*
+
+    AI给的代码，将堆内存转移到静态内存，
+    实测堆内存申请确实可以大幅减少，但是内存不会消失，总的内存占用还是一样的，
+    这段代码超出了我的水平，
+    我不知道会不会出现问题，所以注释掉不使用，
+    不过也不删了，就放在这里吧。
+
+// 静态帧缓冲区（约 608 KB，移出堆）
+static u8 __attribute__((aligned(0x1000))) g_framebuffer_memory[0x98000];  // 622,592 字节
+static bool g_framebuffer_allocated = false;
+
+// 自定义分配器：将帧缓冲区分配到静态内存
+void* __libnx_aligned_alloc(size_t alignment, size_t size) {
+    // 检测是否是帧缓冲区分配（0x1000 对齐 + 大小约 600 KB）
+    if (alignment == 0x1000 && size >= 0x90000 && size <= 0xA0000 && !g_framebuffer_allocated) {
+        g_framebuffer_allocated = true;
+        return g_framebuffer_memory;
+    }
+    // 其他分配仍使用堆
+    size = (size + alignment - 1) & ~(alignment - 1);
+    return aligned_alloc(alignment, size);
+}
+
+void __libnx_free(void* p) {
+    // 如果是静态帧缓冲区，标记为未使用
+    if (p == g_framebuffer_memory) {
+        g_framebuffer_allocated = false;
+        return;
+    }
+    // 其他内存正常释放
+    free(p);
+}
+
+
+#define INNER_HEAP_SIZE 0x80000          // 512 KB 
+
+
+*/
+
+// 堆的大小
+#define INNER_HEAP_SIZE 0x113000          // 1.1 MB
 
 // 系统模块不应使用applet相关功能
 u32 __nx_applet_type = AppletType_None;
 
 // 设置用于 NVIDIA 显卡操作的共享内存大小
-// u32 __nx_nv_transfermem_size = 0x200000;               // 2MB
-u32 __nx_nv_transfermem_size = 0x50000;                   // 320KB
+// (实际测试4k也可以，太底层了，我看不懂，反正4k可以就不管了)
+u32 __nx_nv_transfermem_size = 0x1000;                   // 4 KB
 
 // 系统模块通常只需要使用一个文件系统会话
 u32 __nx_fs_num_sessions = 1;
