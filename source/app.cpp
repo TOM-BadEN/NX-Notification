@@ -139,6 +139,11 @@ NotificationConfig App::ParseIni(const std::string& content) {
         std::string key = line.substr(0, pos);
         std::string value = line.substr(pos + 1);
         
+        // 去除 value 末尾的 \r \n 空格
+        while (!value.empty() && (value.back() == '\r' || value.back() == '\n' || value.back() == ' ')) {
+            value.pop_back();
+        }
+        
         // 匹配对应字段
         if (key == "text") {
             config.text = value;
