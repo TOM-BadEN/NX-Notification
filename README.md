@@ -50,9 +50,9 @@ NX-Notification/
 │   └── Makefile              # 编译配置
 │
 ├── libnotification/           # C 库
-│   ├── libnotification.h     # 源码
-│   ├── example/              # 示例程序
-│   └── README.md             # 库文档
+│   ├── libnotification.h      # 源码
+│   ├── example/               # 示例程序
+│   └── README.md              # 库文档
 │
 └── README.md                  # 本文件
 ```
