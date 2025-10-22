@@ -32,23 +32,10 @@
  * @endcode
  * 
  * @note 注意
- * - 该库为Header-Only库，只需包含头文件即可使用
- * - 使用很简单，也有example
- * - example是为了方便所以用的nro，实际上nro根本不需要三方的通知弹窗
- * - 这个系统模块主要是为了方便别的系统模块插件的调用，请勿滥用
+ * - 请勿滥用弹窗功能！这是为了方便其他系统模块插件的调用，请勿滥用！
  * 
- * @note 注意
- * - 系统模块必须安装
- * - 系统模块完成弹窗后会自动关闭
- * - 系统模块运行时内存占用688KB
- * - 因此如果你的插件需要使用该模块，请向用户提供配置关闭的功能
- * - 因为覆盖层全局只能有一个，所以无法与特斯拉覆盖层共存
- * - 当系统模块运行时，特斯拉会暂时隐藏，且无法打开，弹窗结束后，特斯拉会恢复显示
- * - 因此请不要滥用弹窗，尤其是特斯拉插件，你可以使用libultrahand的内置弹窗功能
- * - 否则会导致用户点一下，出现弹窗，特斯拉暂时无法操作的情况
- * - 弹窗最大持续时间为10s，但是非必要请尽量缩短时间
- * - 弹窗文本最大长度为7个中文字符，超过会被截断
- * - 文本支持unicode字符，和特斯拉一样的用法，对照表见目录
+ * @note 详细文档
+ * - https://github.com/TOM-BadEN/NX-Notification/blob/main/README.md
  */
 
 #ifndef LIBNOTIFICATION_H
@@ -69,11 +56,15 @@ extern "C" {
 // sys-Notification 的 Program ID
 #define NOTIF_SYSMODULE_TID 0x0100000000251020ULL
 
+// sys-Notification 系统模块文件
+#define NOTIF_SYSMODULE_PATH "/atmosphere/contents/0100000000251020/exefs.nsp"
+
 // 通知配置目录路径
 #define _NOTIF_CONFIG_DIR "/config/sys-Notification"
 
 // 通知配置文件路径前缀
 #define _NOTIF_FILE_PREFIX "/config/sys-Notification/notif_"
+
 
 /**
  * @brief 通知类型
@@ -121,6 +112,27 @@ static inline Result _notif_launch(u64 program_id) {
 }
 
 /**
+ * @brief 检查系统模块文件是否存在（存在时缓存，不存在时重复检查）
+ * @return true 文件存在, false 文件不存在
+ * @warning 这是内部函数，用户不应直接调用
+ */
+static inline bool _notif_check_module_file(void) {
+    static bool exists_cached = false;
+    
+    // 如果已经确认文件存在，直接返回
+    if (exists_cached) return true;
+    
+    // 否则每次都检查
+    struct stat st;
+    bool exists = (stat(NOTIF_SYSMODULE_PATH, &st) == 0);
+    
+    // 如果文件存在，缓存这个结果
+    if (exists) exists_cached = true;
+    
+    return exists;
+}
+
+/**
  * @brief 确保系统模块正在运行（如果未运行则启动）
  * @return Result 0=成功（已运行或成功启动），负数=错误码
  * @warning 这是内部函数，用户不应直接调用
@@ -141,29 +153,36 @@ static inline Result _notif_ensure_running(void) {
 }
 
 /**
- * @brief 确保配置目录存在（如果不存在则创建）
+ * @brief 确保配置目录存在（如果不存在则创建，成功后缓存结果）
  * @return true 成功, false 失败
  * @warning 这是内部函数，用户不应直接调用
  */
 static inline bool _notif_ensure_dir(void) {
+    static bool ensured = false;
+    
+    // 如果已经确认目录存在，直接返回
+    if (ensured) return true;
+    
     // 检查目录是否存在
-    DIR* dir = opendir(_NOTIF_CONFIG_DIR);
-    if (dir) {
-        closedir(dir);
+    struct stat st;
+    if (stat(_NOTIF_CONFIG_DIR, &st) == 0) {
+        ensured = true;
         return true;  // 目录已存在
     }
     
     // 目录不存在，尝试创建
     if (mkdir(_NOTIF_CONFIG_DIR, 0755) == 0) {
+        ensured = true;
         return true;  // 创建成功
     }
     
     // 如果错误是"已存在"，也算成功（处理竞态条件）
     if (errno == EEXIST) {
+        ensured = true;
         return true;
     }
     
-    return false;  // 创建失败
+    return false;  // 创建失败，不缓存
 }
 
 /**
@@ -197,6 +216,13 @@ static inline Result createNotification(const char* text,
                                         int duration,
                                         NotificationType type, 
                                         NotificationPosition position) {
+
+    // 检查系统模块文件
+    if (!_notif_check_module_file()) return -5;
+    
+    // 确保配置目录存在
+    if (!_notif_ensure_dir()) return -2;
+
     // 检查参数
     if (!text || text[0] == '\0') return -1;
     
@@ -223,9 +249,6 @@ static inline Result createNotification(const char* text,
     const char* type_str = (type == INFO) ? "INFO" : "ERROR";
     const char* pos_str = (position == LEFT) ? "LEFT" : 
                           (position == MIDDLE) ? "MIDDLE" : "RIGHT";
-    
-    // 确保配置目录存在
-    if (!_notif_ensure_dir()) return -2;
     
     // 生成随机临时文件路径
     char temp_path[256];
