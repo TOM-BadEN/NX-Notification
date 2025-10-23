@@ -175,7 +175,6 @@ $(BUILD):
 #   这个boot2.flag是为了让Atmosphere开机自启该服务
 # 	@touch out/atmosphere/contents/0100000000251020/flags/boot2.flag
 	@cp $(BUILD)/$(TARGET).nsp out/atmosphere/contents/0100000000251020/exefs.nsp
-	@cp sys-json/toolbox.json out/atmosphere/contents/0100000000251020/toolbox.json
 
 #---------------------------------------------------------------------------------
 clean:
