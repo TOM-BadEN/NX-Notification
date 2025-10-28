@@ -75,7 +75,7 @@ int main(int argc, char* argv[])
             GetSystemMemoryInfo(&total_ram, &used_ram, &before_free_ram);
             
             // 申请弹窗通知
-            Result rc = createNotification("这是一次测试", 3, INFO, RIGHT);
+            Result rc = createNotification("我试试八个字效果", 3, INFO, RIGHT);
             
             if (R_FAILED(rc)) {
                 printf("Failed: 0x%x\n", rc);
